@@ -9,11 +9,6 @@
     "thread_id": "10a0a719-8a31-40cd-9b1b-b72460e9ead5",
     "documents": [
       {
-        "name": "CISC-SOFT423_Assignment1-2025.pdf",
-        "id": "6364e214-0e13-4ec5-88a6-d473053bfcbd",
-        "status": "indexed"
-      },
-      {
         "name": "KingHack Test Document.pdf",
         "id": "3461c8ef-9c3e-4598-a943-48225130f723",
         "status": "indexed"
@@ -23,7 +18,13 @@
   "proj_global_cloud": {
     "assistant_id": "1ca67ea7-9979-457d-bdec-3787edf0a491",
     "thread_id": "d9e583c3-bdd9-4636-a872-6e09367f3d00",
-    "documents": []
+    "documents": [
+      {
+        "name": "ACME_Discovery_Call_Teams_Transcript.txt",
+        "id": "bdc3b092-d08f-4dc5-a21a-62c5c6db76fd",
+        "status": "indexed"
+      }
+    ]
   },
   "proj_start_scale": {
     "assistant_id": "b9afed29-1e11-4f86-bb7a-2da5b9068beb",

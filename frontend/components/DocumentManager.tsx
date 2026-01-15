@@ -7,6 +7,7 @@ import {
   Loader2,
   Trash2
 } from 'lucide-react';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface Document {
   name: string;
@@ -23,6 +24,7 @@ interface DocumentManagerProps {
 export function DocumentManager({ projectId, documents, onUploadComplete }: DocumentManagerProps) {
   const [isUploading, setIsUploading] = React.useState(false);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = React.useState<{ id: string; name: string } | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
@@ -54,12 +56,16 @@ export function DocumentManager({ projectId, documents, onUploadComplete }: Docu
     }
   };
 
-  const handleDelete = async (documentId: string, documentName: string) => {
-    if (!confirm(`Are you sure you want to delete "${documentName}"?`)) {
-      return;
-    }
+  const handleDeleteClick = (documentId: string, documentName: string) => {
+    setDeleteConfirm({ id: documentId, name: documentName });
+  };
 
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirm) return;
+
+    const { id: documentId, name: documentName } = deleteConfirm;
     setDeletingId(documentId);
+    
     try {
       const response = await fetch(
         `http://localhost:8000/api/v1/documents?project_id=${projectId}&document_id=${documentId}`,
@@ -69,6 +75,7 @@ export function DocumentManager({ projectId, documents, onUploadComplete }: Docu
       );
 
       if (response.ok) {
+        setDeleteConfirm(null);
         onUploadComplete();
       } else {
         console.error("Delete failed");
@@ -144,7 +151,7 @@ export function DocumentManager({ projectId, documents, onUploadComplete }: Docu
                        </span>
                    )}
                    <button
-                     onClick={() => handleDelete(doc.id || '', doc.name)}
+                     onClick={() => handleDeleteClick(doc.id || '', doc.name)}
                      disabled={deletingId === doc.id}
                      className="ml-2 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                      title="Delete document"
@@ -161,6 +168,19 @@ export function DocumentManager({ projectId, documents, onUploadComplete }: Docu
           </div>
         )}
       </div>
+
+      {/* Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!deleteConfirm}
+        title="Delete Document?"
+        message={`Are you sure you want to delete "${deleteConfirm?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteConfirm(null)}
+        isLoading={deletingId === deleteConfirm?.id}
+      />
     </div>
   );
 }
