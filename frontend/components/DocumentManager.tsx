@@ -4,7 +4,8 @@ import {
   FileText, 
   CheckCircle, 
   AlertCircle, 
-  Loader2 
+  Loader2,
+  Trash2
 } from 'lucide-react';
 
 interface Document {
@@ -21,6 +22,7 @@ interface DocumentManagerProps {
 
 export function DocumentManager({ projectId, documents, onUploadComplete }: DocumentManagerProps) {
   const [isUploading, setIsUploading] = React.useState(false);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
@@ -49,6 +51,34 @@ export function DocumentManager({ projectId, documents, onUploadComplete }: Docu
       console.error("Error uploading:", error);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleDelete = async (documentId: string, documentName: string) => {
+    if (!confirm(`Are you sure you want to delete "${documentName}"?`)) {
+      return;
+    }
+
+    setDeletingId(documentId);
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/v1/documents?project_id=${projectId}&document_id=${documentId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (response.ok) {
+        onUploadComplete();
+      } else {
+        console.error("Delete failed");
+        alert("Failed to delete document");
+      }
+    } catch (error) {
+      console.error("Error deleting:", error);
+      alert("Error deleting document");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -113,6 +143,18 @@ export function DocumentManager({ projectId, documents, onUploadComplete }: Docu
                            <CheckCircle className="w-3 h-3" /> Indexed
                        </span>
                    )}
+                   <button
+                     onClick={() => handleDelete(doc.id || '', doc.name)}
+                     disabled={deletingId === doc.id}
+                     className="ml-2 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                     title="Delete document"
+                   >
+                     {deletingId === doc.id ? (
+                       <Loader2 className="w-4 h-4 animate-spin" />
+                     ) : (
+                       <Trash2 className="w-4 h-4" />
+                     )}
+                   </button>
                 </div>
               </div>
             ))}

@@ -163,6 +163,18 @@ class CustomBackboardClient:
             # Let's assume it returns { "status": "indexed", ... }
             return DocumentStatusObj(**data)
 
+    async def delete_document(self, document_id: str) -> Dict[str, Any]:
+        """Delete a document from Backboard"""
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.delete(
+                f"{self.BASE_URL}/documents/{document_id}",
+                headers=self.headers
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return data
+
+
 class ConsultingAssistant:
     """
     Agentic sales & consulting assistant powered by Backboard.io
@@ -461,6 +473,26 @@ Use it to help close the deal and deliver consulting value.
                 logger.error(f" ❌ Error uploading {path_obj.name}: {e}")
                 
         return uploaded_docs
+
+    async def remove_project_document(self, document_id: str, document_name: str) -> Dict[str, Any]:
+        """Remove a document from the project"""
+        if not self.assistant:
+            raise RuntimeError("Assistant not initialized. Call initialize() first.")
+        
+        logger.info(f"🗑️ Removing document: {document_name} ({document_id})...")
+        
+        try:
+            result = await self.client.delete_document(document_id)
+            logger.info(f"✓ Document removed: {document_name}")
+            return {
+                "status": "success",
+                "document_id": document_id,
+                "document_name": document_name,
+                "message": f"Document '{document_name}' successfully removed"
+            }
+        except Exception as e:
+            logger.error(f"❌ Error removing document {document_name}: {e}")
+            raise
 
     async def chat(self, user_message: str) -> Dict[str, Any]:
         if not self.assistant or not self.user_thread:

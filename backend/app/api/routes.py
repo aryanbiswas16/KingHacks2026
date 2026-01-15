@@ -63,7 +63,36 @@ def add_documents_to_mapping(project_id: str, new_docs: List[Dict]):
         path.write_text(json.dumps(mappings, indent=2))
         logger.info(f"Updated document mappings for {project_id}")
     except Exception as e:
-        logger.error(f"Error saving document mapping: {e}") 
+        logger.error(f"Error saving document mapping: {e}")
+
+def remove_document_from_mapping(project_id: str, document_id: str):
+    """Remove a document from the project mappings"""
+    try:
+        mappings = load_mappings()
+        if project_id not in mappings:
+            return False
+        
+        if "documents" not in mappings[project_id]:
+            return False
+        
+        # Filter out the document with the given ID
+        original_count = len(mappings[project_id]["documents"])
+        mappings[project_id]["documents"] = [
+            d for d in mappings[project_id]["documents"] 
+            if d.get("id") != document_id
+        ]
+        
+        if len(mappings[project_id]["documents"]) < original_count:
+            path = get_mappings_path()
+            path.write_text(json.dumps(mappings, indent=2))
+            logger.info(f"Removed document {document_id} from {project_id}")
+            return True
+        
+        return False
+    except Exception as e:
+        logger.error(f"Error removing document from mapping: {e}")
+        return False
+ 
 
 # --- Dependency Injection ---
 
@@ -170,6 +199,40 @@ async def get_documents(project_id: str = Query(...)):
     mappings = load_mappings()
     docs = mappings.get(project_id, {}).get("documents", [])
     return {"documents": docs}
+
+@router.delete("/documents")
+async def delete_document(
+    project_id: str = Query(...),
+    document_id: str = Query(...)
+):
+    """Delete a document from the project"""
+    try:
+        assistant = await get_assistant(project_id)
+        
+        # Find the document in mappings to get its name
+        mappings = load_mappings()
+        doc_name = None
+        if project_id in mappings and "documents" in mappings[project_id]:
+            for doc in mappings[project_id]["documents"]:
+                if doc.get("id") == document_id:
+                    doc_name = doc.get("name", "Unknown")
+                    break
+        
+        if not doc_name:
+            raise HTTPException(status_code=404, detail=f"Document {document_id} not found in project")
+        
+        # Remove from Backboard
+        result = await assistant.remove_project_document(document_id, doc_name)
+        
+        # Remove from mappings
+        remove_document_from_mapping(project_id, document_id)
+        
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting document: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/chat")
 async def chat_endpoint(
