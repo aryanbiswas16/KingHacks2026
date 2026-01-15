@@ -1,0 +1,13 @@
+
+        MEETING TRANSCRIPT - JAN 15, 2024
+        Attendees: Jordan (Sales), Sarah Chen (CTO - Global Bank), Elena (CISO)
+        
+        Jordan: Thanks for meeting. We wanted to discuss the timeline for the payment gateway replacement.
+        Sarah: Yes, we are under pressure. The current legacy system is costing us $50,000 every hour it goes down. We need cost reduction.
+        Jordan: Understood. Our solution can cut that by 20% in the first year.
+        Elena: My concern is security. We cannot have data leaving the EU. GDPR compliance is non-negotiable.
+        Sarah: Elena, I know, but we also need speed. If we don't go live in 3 regions by Q2, we lose market share to the neobanks.
+        Elena: I'm just saying, your competitor Stripe has a better documented data residency policy.
+        Jordan: We can match that. But our main advantage is the developer API. Your team hates the current XML SOAP legacy stuff.
+        Sarah: true, Marcus (VP Eng) keeps complaining about it. He's our biggest champion for this switch.
+        

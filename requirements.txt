@@ -1,0 +1,6 @@
+backboard-sdk
+python-dotenv
+pydantic
+fastapi
+uvicorn
+python-multipart

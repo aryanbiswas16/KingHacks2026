@@ -1,0 +1,12 @@
+
+        INTERNAL MEMO: GLOBAL BANK OPPORTUNITY
+        Deal Size estimate: $1.5M ARR
+        Stage: Negotiation
+        
+        Competitors: Stripe, Adyen
+        
+        Key Objections heard so far:
+        1. Price is 15% higher than Adyen.
+        2. Legal hasn't signed off on liability caps.
+        3. Migration timeline of 3 months seems "too fast" to them.
+        
