@@ -3,5 +3,10 @@
     "assistant_id": "86d7569c-f3a6-4e88-8b5e-cd0dcef72df8",
     "thread_id": "fe7d336b-9432-4176-b9aa-44af8f6d46cf",
     "documents": []
+  },
+  "proj_global_pay": {
+    "assistant_id": "1054a9be-212a-4267-89a0-27eb534e7f2c",
+    "thread_id": "28c21b46-2839-485c-8441-44ea2b97cd81",
+    "documents": []
   }
 }

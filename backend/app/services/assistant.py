@@ -2,16 +2,146 @@ import json
 import asyncio
 import os
 import logging
+import httpx
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
+from pydantic import BaseModel
 
-from backboard import BackboardClient
 from ..models.domain import ConsultingContext
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# --- Custom Backboard Client Models ---
+
+class AssistantObj(BaseModel):
+    assistant_id: str
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class ThreadObj(BaseModel):
+    thread_id: str
+    messages: List[Dict] = []
+
+class MessageResponseObj(BaseModel):
+    content: str
+    message: str = "success"
+
+class DocumentObj(BaseModel):
+    document_id: str
+    status: str
+    status_message: Optional[str] = None
+
+class DocumentStatusObj(BaseModel):
+    status: str
+    status_message: Optional[str] = None
+
+class CustomBackboardClient:
+    BASE_URL = "https://app.backboard.io/api"
+
+    def __init__(self, api_key: str, timeout: int = 120):
+        self.api_key = api_key
+        self.timeout = timeout
+        self.headers = {"X-API-Key": self.api_key}
+
+    async def create_assistant(self, name: str, description: str, system_prompt: Optional[str] = None) -> AssistantObj:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            json_payload = {"name": name, "description": description}
+            if system_prompt:
+                json_payload["system_prompt"] = system_prompt
+                
+            resp = await client.post(
+                f"{self.BASE_URL}/assistants",
+                json=json_payload,
+                headers=self.headers
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return AssistantObj(**data)
+
+    async def get_assistant(self, assistant_id: str) -> AssistantObj:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.get(
+                f"{self.BASE_URL}/assistants/{assistant_id}",
+                headers=self.headers
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return AssistantObj(**data)
+
+    async def create_thread(self, assistant_id: str) -> ThreadObj:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.post(
+                f"{self.BASE_URL}/assistants/{assistant_id}/threads",
+                json={},
+                headers=self.headers
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return ThreadObj(**data)
+
+    async def get_thread(self, thread_id: str) -> ThreadObj:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.get(
+                f"{self.BASE_URL}/threads/{thread_id}",
+                headers=self.headers
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return ThreadObj(**data)
+
+    async def add_message(self, thread_id: str, content: str, llm_provider: Optional[str] = None, model_name: Optional[str] = None, memory: str = "off", stream: bool = False, send_to_llm: bool = True) -> MessageResponseObj:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            form_data = {
+                "content": content,
+                "memory": memory,
+                "stream": str(stream).lower(),
+                "send_to_llm": str(send_to_llm).lower()
+            }
+            if llm_provider:
+                form_data["llm_provider"] = llm_provider
+            if model_name:
+                form_data["model_name"] = model_name
+            
+            resp = await client.post(
+                f"{self.BASE_URL}/threads/{thread_id}/messages",
+                data=form_data,
+                headers=self.headers 
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return MessageResponseObj(**data)
+
+    async def upload_document_to_assistant(self, assistant_id: str, file_path: str) -> DocumentObj:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            file_path_obj = Path(file_path)
+            files = {'file': (file_path_obj.name, open(file_path, 'rb'), 'application/octet-stream')}
+            
+            resp = await client.post(
+                f"{self.BASE_URL}/assistants/{assistant_id}/documents",
+                files=files,
+                headers=self.headers
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return DocumentObj(**data)
+
+    async def get_document_status(self, document_id: str) -> DocumentStatusObj:
+        # Docs say: GET /documents/{document_id}/status
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.get(
+                f"{self.BASE_URL}/documents/{document_id}/status",
+                headers=self.headers
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            
+            # Handle potentially different response structure
+            # The text says "Documents (Collapsed)" -> get /documents/{document_id}/status
+            # Let's assume it returns { "status": "indexed", ... }
+            return DocumentStatusObj(**data)
 
 class ConsultingAssistant:
     """
@@ -22,7 +152,8 @@ class ConsultingAssistant:
         """Initialize Backboard client"""
         if not api_key:
             raise ValueError("API Key is required")
-        self.client = BackboardClient(api_key=api_key, timeout=120)
+        # Use our Custom Client
+        self.client = CustomBackboardClient(api_key=api_key, timeout=120)
         self.assistant = None
         self.user_thread = None
         self.context = None
@@ -103,8 +234,9 @@ class ConsultingAssistant:
         response = await self.client.add_message(
             thread_id=thread.thread_id,
             content=extraction_prompt,
-            llm_provider="featherless",
-            model_name="12thD/ko-Llama-3-8B-sft-v0.3",
+            # Let the default assistant model (likely GPT-4o) handle this for better reasoning
+            # llm_provider="featherless",
+            # model_name="12thD/ko-Llama-3-8B-sft-v0.3",
             memory="None", 
             stream=False
         )
@@ -152,9 +284,12 @@ class ConsultingAssistant:
         """
         logger.info(f"🚀 Initializing sales/consulting assistant for {context.username}...")
         
+        system_prompt = self._generate_system_prompt(context)
+        
         self.assistant = await self.client.create_assistant(
             name=f"Sales & Consulting Assistant - {context.project_name}",
-            description="Strategic partner for sales pursuits and consulting engagements"
+            description="Strategic partner for sales pursuits and consulting engagements",
+            system_prompt=system_prompt
         )
         
         logger.info(f"✓ Assistant created: {str(self.assistant.assistant_id)}")
@@ -165,14 +300,8 @@ class ConsultingAssistant:
         
         logger.info(f"✓ Thread created: {str(self.user_thread.thread_id)}")
 
-        await self.client.add_message(
-            thread_id=self.user_thread.thread_id,
-            content=self._generate_system_prompt(context),
-            llm_provider="featherless",
-            model_name="12thD/ko-Llama-3-8B-sft-v0.3",
-            memory="Auto",
-            stream=False
-        )
+        # No need to send system prompt as a user message anymore, as it's set on the assistant. 
+        # But we might want to "prime" the thread with a welcome? No, let's keep it clean.
         
         self.context = context
         logger.info("✓ Assistant initialized successfully")
@@ -324,8 +453,9 @@ Use it to help close the deal and deliver consulting value.
             response = await self.client.add_message(
                 thread_id=self.user_thread.thread_id,
                 content=user_message,
-                llm_provider="featherless",
-                model_name="12thD/ko-Llama-3-8B-sft-v0.3",
+                # Use assistant default or system default (likely OpenAI GPT-4o)
+                # llm_provider="featherless",
+                # model_name="12thD/ko-Llama-3-8B-sft-v0.3",
                 memory="Auto",
                 stream=False
             )
