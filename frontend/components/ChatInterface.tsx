@@ -1,18 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Sparkles } from 'lucide-react';
+import { Send, Bot, User, Loader2, Sparkles, ThumbsUp, ThumbsDown, FileText } from 'lucide-react';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  citations?: string[];
+  feedback?: 'up' | 'down';
 }
+
+export type { Message };
 
 interface ChatInterfaceProps {
   projectId: string;
   projectName: string;
+  messages: Message[];
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
 }
 
-export function ChatInterface({ projectId, projectName }: ChatInterfaceProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export function ChatInterface({ projectId, projectName, messages, setMessages }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -42,7 +47,11 @@ export function ChatInterface({ projectId, projectName }: ChatInterfaceProps) {
       const data = await response.json();
       
       if (data.response) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+        setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: data.response, 
+            citations: data.citations 
+        }]);
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I couldn't process that request." }]);
       }
@@ -51,6 +60,30 @@ export function ChatInterface({ projectId, projectName }: ChatInterfaceProps) {
       setMessages(prev => [...prev, { role: 'assistant', content: "Network error. Please try again." }]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleFeedback = async (index: number, type: 'up' | 'down') => {
+    const msg = messages[index];
+    if (!msg || msg.role !== 'assistant') return;
+
+    // Optimistic update
+    const newMessages = [...messages];
+    newMessages[index] = { ...newMessages[index], feedback: type };
+    setMessages(newMessages);
+
+    try {
+      await fetch(`http://localhost:8000/api/v1/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_content: msg.content,
+          rating: type,
+          project_id: projectId
+        }),
+      });
+    } catch (error) {
+      console.error("Feedback failed", error);
     }
   };
 
@@ -99,6 +132,43 @@ export function ChatInterface({ projectId, projectName }: ChatInterfaceProps) {
                 </div>
               )}
               <div className="whitespace-pre-wrap">{msg.content}</div>
+
+              {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-slate-200">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Sources Referenced</p>
+                  <div className="flex flex-wrap gap-2">
+                    {msg.citations.map((cite, i) => (
+                      <button 
+                        key={i} 
+                        onClick={() => alert(`Opening document preview for: ${cite}`)}
+                        className="flex items-center gap-1.5 text-xs bg-slate-50 text-blue-600 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-blue-50 hover:border-blue-200 transition-all"
+                      >
+                        <FileText className="w-3 h-3" />
+                        <span className="truncate max-w-[150px]">{cite}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {msg.role === 'assistant' && (
+                <div className="mt-3 flex justify-end gap-1">
+                   <button 
+                    onClick={() => handleFeedback(idx, 'up')}
+                    className={`p-1.5 rounded hover:bg-slate-100 transition-colors ${msg.feedback === 'up' ? 'text-green-600' : 'text-slate-400'}`}
+                    title="Helpful"
+                   >
+                     <ThumbsUp className="w-3.5 h-3.5" />
+                   </button>
+                   <button 
+                    onClick={() => handleFeedback(idx, 'down')}
+                    className={`p-1.5 rounded hover:bg-slate-100 transition-colors ${msg.feedback === 'down' ? 'text-red-600' : 'text-slate-400'}`}
+                    title="Not Helpful"
+                   >
+                     <ThumbsDown className="w-3.5 h-3.5" />
+                   </button>
+                </div>
+              )}
             </div>
           </div>
         ))}

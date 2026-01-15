@@ -12,7 +12,22 @@
         "name": "KingHack Test Document.pdf",
         "id": "0d633dac-706e-4a2c-930a-3e8d0bc61950",
         "status": "indexed"
+      },
+      {
+        "name": "CISC-SOFT423_Assignment1-2025.pdf",
+        "id": "6364e214-0e13-4ec5-88a6-d473053bfcbd",
+        "status": "indexed"
       }
     ]
+  },
+  "proj_global_cloud": {
+    "assistant_id": "1ca67ea7-9979-457d-bdec-3787edf0a491",
+    "thread_id": "d9e583c3-bdd9-4636-a872-6e09367f3d00",
+    "documents": []
+  },
+  "proj_start_scale": {
+    "assistant_id": "b9afed29-1e11-4f86-bb7a-2da5b9068beb",
+    "thread_id": "9fbd4d5d-953d-41cf-9c7d-c43414762a7d",
+    "documents": []
   }
 }

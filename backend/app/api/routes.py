@@ -3,7 +3,8 @@ import os
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Query, Depends
 from ..services.assistant import ConsultingAssistant
 from ..models.domain import ConsultingContext
@@ -178,8 +179,27 @@ async def chat_endpoint(
     logger.info(f"Chat request for {project_id}")
     try:
         assistant = await get_assistant(project_id)
-        response = await assistant.chat(message)
-        return {"response": response, "project_id": project_id}
+        # response is a dict with 'response' and 'citations'
+        result = await assistant.chat(message)
+        
+        return {
+            "response": result["response"], 
+            "citations": result.get("citations", []),
+            "project_id": project_id
+        }
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+class FeedbackRequest(BaseModel):
+    message_content: str
+    rating: str # 'up' or 'down'
+    project_id: str
+
+@router.post("/feedback")
+async def feedback_endpoint(feedback: FeedbackRequest):
+    logger.info(f"👍 Feedback received for Project {feedback.project_id}: {feedback.rating}")
+    logger.info(f"   Context: {feedback.message_content[:50]}...")
+    
+    # In a real app, save to database. For now, we log it.
+    return {"status": "success", "message": "Feedback recorded"}

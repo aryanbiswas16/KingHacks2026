@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Sidebar } from "../../components/Sidebar";
-import { ChatInterface } from "../../components/ChatInterface";
+import { ChatInterface, type Message } from "../../components/ChatInterface";
 import { DocumentManager } from "../../components/DocumentManager";
 import { ProjectOverview } from "../../components/ProjectOverview";
 import { LayoutDashboard, MessageSquare, Files } from 'lucide-react';
@@ -43,9 +43,27 @@ export default function DashboardPage() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(clients[0]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(clients[0].projects[0]);
   const [activeTab, setActiveTab] = useState<'overview' | 'chat' | 'documents'>('chat');
+  const [projectChats, setProjectChats] = useState<Record<string, Message[]>>({});
   
   // Minimal document state mock
   const [documents, setDocuments] = useState<any[]>([]);
+
+  // Helper to update messages for current project
+  const updateCurrentProjectMessages = (action: React.SetStateAction<Message[]>) => {
+    if (!selectedProject) return;
+    
+    setProjectChats(prev => {
+      const currentMessages = prev[selectedProject.id] || [];
+      const newMessages = typeof action === 'function' 
+        ? action(currentMessages)
+        : action;
+        
+      return {
+        ...prev,
+        [selectedProject.id]: newMessages
+      };
+    });
+  };
 
   // Function to refresh documents list (called after upload)
   const refreshDocuments = async () => {
@@ -140,7 +158,13 @@ export default function DashboardPage() {
                 
                 {activeTab === 'chat' && (
                   <div className="animate-in fade-in duration-300">
-                    <ChatInterface projectId={selectedProject.id} projectName={selectedProject.name} />
+                    <ChatInterface 
+                      key={selectedProject.id}
+                      projectId={selectedProject.id} 
+                      projectName={selectedProject.name}
+                      messages={projectChats[selectedProject.id] || []}
+                      setMessages={updateCurrentProjectMessages}
+                    />
                   </div>
                 )}
                 

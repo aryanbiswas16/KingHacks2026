@@ -462,7 +462,7 @@ Use it to help close the deal and deliver consulting value.
                 
         return uploaded_docs
 
-    async def chat(self, user_message: str) -> str:
+    async def chat(self, user_message: str) -> Dict[str, Any]:
         if not self.assistant or not self.user_thread:
             raise RuntimeError("Assistant not initialized. Call initialize() first.")
         
@@ -482,8 +482,24 @@ Use it to help close the deal and deliver consulting value.
             
             full_response = response.content
             logger.info(f"🤖 Assistant: {full_response}")
-            return full_response
+            
+            # --- SIMULATED CITATIONS FOR PROTOTYPE ---
+            # In a real scenario, Backboard might return these in a 'metadata' field.
+            citations = []
+            if self.context and self.context.available_documents:
+                # Naive: Just return all or a random subset to show UI capability
+                import random
+                num_citations = random.randint(1, min(3, len(self.context.available_documents)))
+                citations = random.sample(self.context.available_documents, num_citations)
+            
+            return {
+                "response": full_response,
+                "citations": citations
+            }
 
         except Exception as e:
             logger.error(f"❌ Error in chat chat: {e}")
-            return "I apologize, but I encountered an error connecting to the AI provider. Please try again."
+            return {
+                "response": "I apologize, but I encountered an error connecting to the AI provider. Please try again.",
+                "citations": []
+            }
