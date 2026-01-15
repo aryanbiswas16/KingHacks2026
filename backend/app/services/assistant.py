@@ -3,6 +3,7 @@ import asyncio
 import os
 import logging
 import httpx
+import mimetypes
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional, Any
@@ -117,16 +118,35 @@ class CustomBackboardClient:
     async def upload_document_to_assistant(self, assistant_id: str, file_path: str) -> DocumentObj:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             file_path_obj = Path(file_path)
-            files = {'file': (file_path_obj.name, open(file_path, 'rb'), 'application/octet-stream')}
             
-            resp = await client.post(
-                f"{self.BASE_URL}/assistants/{assistant_id}/documents",
-                files=files,
-                headers=self.headers
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return DocumentObj(**data)
+            # Detect MIME type from file extension
+            mime_type, _ = mimetypes.guess_type(str(file_path_obj))
+            if not mime_type:
+                # Default to text/plain for unknown types
+                mime_type = 'text/plain'
+            
+            logger.info(f"     MIME type: {mime_type}")
+            
+            try:
+                with open(file_path, 'rb') as f:
+                    files = {'file': (file_path_obj.name, f, mime_type)}
+                    
+                    resp = await client.post(
+                        f"{self.BASE_URL}/assistants/{assistant_id}/documents",
+                        files=files,
+                        headers=self.headers
+                    )
+                    
+                    if resp.status_code not in [200, 201, 202]:
+                        error_body = resp.text
+                        logger.error(f"Upload API Error {resp.status_code}: {error_body}")
+                    
+                    resp.raise_for_status()
+                    data = resp.json()
+                    return DocumentObj(**data)
+            except Exception as e:
+                logger.error(f"Exception in upload_document_to_assistant: {type(e).__name__}: {str(e)}")
+                raise
 
     async def get_document_status(self, document_id: str) -> DocumentStatusObj:
         # Docs say: GET /documents/{document_id}/status

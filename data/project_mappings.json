@@ -7,6 +7,12 @@
   "proj_global_pay": {
     "assistant_id": "016235dd-a303-4d01-988f-f559c2f11491",
     "thread_id": "10a0a719-8a31-40cd-9b1b-b72460e9ead5",
-    "documents": []
+    "documents": [
+      {
+        "name": "KingHack Test Document.pdf",
+        "id": "0d633dac-706e-4a2c-930a-3e8d0bc61950",
+        "status": "indexed"
+      }
+    ]
   }
 }
