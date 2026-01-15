@@ -95,15 +95,20 @@ async def get_assistant(project_id: str) -> ConsultingAssistant:
             key_stakeholders=[], team_members=[], available_documents=[], key_objections=[]
         )
         
-        await new_assistant.load_existing_session(
-            assistant_id=data["assistant_id"],
-            thread_id=data["thread_id"],
-            context=default_context 
-        )
-        project_assistants[project_id] = new_assistant
-        return new_assistant
+        try:
+            await new_assistant.load_existing_session(
+                assistant_id=data["assistant_id"],
+                thread_id=data["thread_id"],
+                context=default_context 
+            )
+            project_assistants[project_id] = new_assistant
+            return new_assistant
+        except Exception as e:
+            logger.warning(f"Failed to load existing session (ID might be invalid or expired): {e}. Initializing new session.")
+            # Remove invalid mapping logic so we fall through to create a new one
+            pass
 
-    # If no mapping exists, we initialize a fresh one (Usually this should be explicit via a 'create' endpoint)
+    # If no mapping exists (or failed to load), we initialize a fresh one (Usually this should be explicit via a 'create' endpoint)
     # For now, we keep the auto-create behavior but log it.
     logger.info(f"Initializing NEW assistant for Project ID: {project_id}")
     
