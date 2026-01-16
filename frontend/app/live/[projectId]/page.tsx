@@ -12,9 +12,14 @@ export default function LiveTranscriptionPage() {
   const [isLive, setIsLive] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [meetingUrl, setMeetingUrl] = useState("");
+  const [meetingName, setMeetingName] = useState("");
   const [transcript, setTranscript] = useState("");
   const [shareError, setShareError] = useState("");
   const [sharedStream, setSharedStream] = useState<MediaStream | null>(null);
+  const [autoSave, setAutoSave] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saveSuccess, setSaveSuccess] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -79,25 +84,70 @@ export default function LiveTranscriptionPage() {
     }
   };
 
-  const handleSaveTranscript = () => {
-    const content = transcript || "";
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `${projectId || "live-transcript"}-${timestamp}.txt`;
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+  const deriveMeetingName = () => {
+    const trimmed = meetingName.trim();
+    if (trimmed) return trimmed;
+    const urlValue = meetingUrl.trim();
+    if (urlValue) {
+      try {
+        const parsed = new URL(urlValue);
+        const path = parsed.pathname.replace(/\//g, " ").trim();
+        if (path) return path;
+      } catch {
+        return urlValue;
+      }
+    }
+    return "zoom_meeting";
+  };
+
+  const uploadTranscript = async () => {
+    if (!projectId) {
+      setSaveError("Project ID is not available.");
+      setSaveSuccess("");
+      return;
+    }
+    const trimmedTranscript = transcript.trim();
+    if (!trimmedTranscript) {
+      setSaveError("Transcript is empty. Nothing to save.");
+      setSaveSuccess("");
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError("");
+    setSaveSuccess("");
+    try {
+      const response = await fetch("http://localhost:8000/api/v1/transcript/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: projectId,
+          meeting_name: deriveMeetingName(),
+          meeting_datetime: new Date().toISOString(),
+          transcript: trimmedTranscript,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.detail || "Failed to save transcript.");
+      }
+
+      setSaveSuccess("Transcript saved to Backboard RAG.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Save failed.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleToggle = async () => {
     if (isLive) {
       await stopStreaming();
       stopShare();
+      if (autoSave) {
+        await uploadTranscript();
+      }
       return;
     }
 
@@ -217,20 +267,59 @@ export default function LiveTranscriptionPage() {
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                 Live Transcript
               </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    Meeting Name
+                  </label>
+                  <input
+                    value={meetingName}
+                    onChange={(e) => setMeetingName(e.target.value)}
+                    placeholder="Customer discovery call"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                    Meeting Link (Optional)
+                  </label>
+                  <input
+                    value={meetingUrl}
+                    onChange={(e) => setMeetingUrl(e.target.value)}
+                    placeholder="https://zoom.us/j/..."
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                </div>
+              </div>
               <textarea
                 value={transcript}
                 onChange={(e) => setTranscript(e.target.value)}
                 placeholder="Paste or stream live transcript here..."
                 className="flex-1 w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
-              <div className="flex justify-end mt-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
+                <div className="text-xs text-slate-500">
+                  {isSaving ? "Saving transcript..." : autoSave ? "Auto-save is on" : "Auto-save is off"}
+                </div>
                 <button
-                  className="px-4 py-2 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800"
-                  onClick={handleSaveTranscript}
+                  type="button"
+                  role="switch"
+                  aria-checked={autoSave}
+                  onClick={() => setAutoSave((prev) => !prev)}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    autoSave
+                      ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                      : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                  }`}
                 >
-                  Save Transcript
+                  {autoSave ? "Auto-save On" : "Auto-save Off"}
                 </button>
               </div>
+              {(saveError || saveSuccess) && (
+                <p className={`text-xs mt-2 ${saveError ? "text-red-600" : "text-emerald-600"}`}>
+                  {saveError || saveSuccess}
+                </p>
+              )}
             </div>
           </div>
 
