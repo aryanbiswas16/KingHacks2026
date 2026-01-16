@@ -29,6 +29,11 @@ class ThreadObj(BaseModel):
 class MessageResponseObj(BaseModel):
     content: str
     message: str = "success"
+    role: Optional[str] = None
+    status: Optional[str] = None
+    run_id: Optional[str] = None
+    tool_calls: Optional[List[Dict]] = None
+    citations: Optional[List[Dict]] = None
 
 class DocumentObj(BaseModel):
     document_id: str
@@ -72,6 +77,16 @@ class CustomBackboardClient:
             data = resp.json()
             return AssistantObj(**data)
 
+    async def delete_assistant(self, assistant_id: str) -> Dict[str, Any]:
+        """Permanently delete an assistant and all associated resources"""
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.delete(
+                f"{self.BASE_URL}/assistants/{assistant_id}",
+                headers=self.headers
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     async def create_thread(self, assistant_id: str) -> ThreadObj:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(
@@ -93,19 +108,22 @@ class CustomBackboardClient:
             data = resp.json()
             return ThreadObj(**data)
 
-    async def add_message(self, thread_id: str, content: str, llm_provider: Optional[str] = None, model_name: Optional[str] = None, memory: str = "off", stream: bool = False, send_to_llm: bool = True) -> MessageResponseObj:
+    async def add_message(self, thread_id: str, content: str, llm_provider: Optional[str] = None, model_name: Optional[str] = None, memory: str = "off", stream: bool = False, send_to_llm: bool = True, web_search: str = "off") -> MessageResponseObj:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             form_data = {
                 "content": content,
                 "memory": memory,
                 "stream": str(stream).lower(),
-                "send_to_llm": str(send_to_llm).lower()
+                "send_to_llm": str(send_to_llm).lower(),
+                "web_search": web_search
             }
             if llm_provider:
                 form_data["llm_provider"] = llm_provider
             if model_name:
                 form_data["model_name"] = model_name
             
+            # The API specifies multipart/form-data, but accepts urlencoded (per quickstart)
+            # We send form_data using data= which sends application/x-www-form-urlencoded
             resp = await client.post(
                 f"{self.BASE_URL}/threads/{thread_id}/messages",
                 data=form_data,
@@ -476,22 +494,56 @@ Use it to help close the deal and deliver consulting value.
 
     async def remove_project_document(self, document_id: str, document_name: str) -> Dict[str, Any]:
         """Remove a document from the project"""
-        if not self.assistant:
-            raise RuntimeError("Assistant not initialized. Call initialize() first.")
-        
+        # If assistant is not initialized, we try to create a temporary client just for deletion 
+        # but logically we should have an assistant context.
+        # However, for robustness, if we only need the client helper:
+        if not self.client: 
+             # Should not happen in normal usage
+             raise RuntimeError("Client not initialized")
+
         logger.info(f"🗑️ Removing document: {document_name} ({document_id})...")
         
         try:
             result = await self.client.delete_document(document_id)
             logger.info(f"✓ Document removed: {document_name}")
-            return {
-                "status": "success",
-                "document_id": document_id,
-                "document_name": document_name,
-                "message": f"Document '{document_name}' successfully removed"
-            }
+            return result
+        except httpx.HTTPStatusError as e:
+            # If the document is already gone (404), we consider this a success so local state can be cleaned up
+            if e.response.status_code == 404:
+                logger.warning(f"⚠️ Document {document_name} was already deleted on server (404). Cleaning up local state.")
+                return {
+                    "message": "Document not found on server, treated as deleted.",
+                    "document_id": document_id,
+                    "deleted_at": datetime.now().isoformat()
+                }
+            # Re-raise other errors
+            logger.error(f"❌ HTTP Error removing document {document_name}: {e}")
+            raise e
         except Exception as e:
             logger.error(f"❌ Error removing document {document_name}: {e}")
+            raise
+
+    async def hard_reset_assistant(self) -> Dict[str, Any]:
+        """
+        Dangerously delete the current assistant to reset state.
+        """
+        if not self.assistant:
+            return {"status": "skipped", "message": "No assistant linked to this session"}
+        
+        a_id = self.assistant.assistant_id
+        logger.warning(f"⚠️ HARD RESET: Deleting assistant {a_id}...")
+        try:
+            res = await self.client.delete_assistant(a_id)
+            self.assistant = None
+            self.user_thread = None
+            self.context = None
+            return {
+                "status": "success", 
+                "message": f"Assistant {a_id} deleted. Project reset.",
+                "api_response": res
+            }
+        except Exception as e:
+            logger.error(f"Failed to reset assistant: {e}")
             raise
 
     async def chat(self, user_message: str) -> Dict[str, Any]:
@@ -517,8 +569,8 @@ Use it to help close the deal and deliver consulting value.
             
             # --- SIMULATED CITATIONS FOR PROTOTYPE ---
             # In a real scenario, Backboard might return these in a 'metadata' field.
-            citations = []
-            if self.context and self.context.available_documents:
+            citations = response.citations if response.citations else []
+            if not citations and self.context and self.context.available_documents:
                 # Naive: Just return all or a random subset to show UI capability
                 import random
                 num_citations = random.randint(1, min(3, len(self.context.available_documents)))

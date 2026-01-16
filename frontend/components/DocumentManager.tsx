@@ -5,7 +5,8 @@ import {
   CheckCircle, 
   AlertCircle, 
   Loader2,
-  Trash2
+  Trash2,
+  RefreshCw
 } from 'lucide-react';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -25,6 +26,8 @@ export function DocumentManager({ projectId, documents, onUploadComplete }: Docu
   const [isUploading, setIsUploading] = React.useState(false);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = React.useState<{ id: string; name: string } | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = React.useState(false);
+  const [isResetting, setIsResetting] = React.useState(false);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
@@ -89,6 +92,29 @@ export function DocumentManager({ projectId, documents, onUploadComplete }: Docu
     }
   };
 
+  const handleResetProject = async () => {
+    setIsResetting(true);
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/reset?project_id=${projectId}`, {
+        method: "DELETE"
+      });
+      
+      if (response.ok) {
+        setShowResetConfirm(false);
+        onUploadComplete(); // Refresh list (should be empty now)
+        alert("Project memory has been reset.");
+      } else {
+        console.error("Reset failed");
+        alert("Failed to reset project memory");
+      }
+    } catch (error) {
+      console.error("Error resetting:", error);
+      alert("Error resetting project");
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
       <div className="flex justify-between items-center mb-6">
@@ -96,25 +122,40 @@ export function DocumentManager({ projectId, documents, onUploadComplete }: Docu
           <FileText className="w-5 h-5 text-blue-600" />
           Project Documents
         </h3>
-        <div className="relative">
-          <input
-            type="file"
-            multiple
-            onChange={handleFileUpload}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            disabled={isUploading}
-          />
-          <button 
-            disabled={isUploading}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-          >
-            {isUploading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Upload className="w-4 h-4" />
-            )}
-            Upload Files
-          </button>
+        <div className="flex gap-2">
+           <button 
+             onClick={() => setShowResetConfirm(true)}
+             disabled={isResetting || isUploading}
+             className="flex items-center gap-2 bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+             title="Hard Reset Project Memory"
+           >
+             {isResetting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+             ) : (
+                <RefreshCw className="w-4 h-4" />
+             )}
+             Reset Memory
+           </button>
+           <div className="relative">
+             <input
+               type="file"
+               multiple
+               onChange={handleFileUpload}
+               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+               disabled={isUploading}
+             />
+             <button 
+               disabled={isUploading}
+               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+             >
+               {isUploading ? (
+                 <Loader2 className="w-4 h-4 animate-spin" />
+               ) : (
+                 <Upload className="w-4 h-4" />
+               )}
+               Upload Files
+             </button>
+           </div>
         </div>
       </div>
 
@@ -180,6 +221,18 @@ export function DocumentManager({ projectId, documents, onUploadComplete }: Docu
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteConfirm(null)}
         isLoading={deletingId === deleteConfirm?.id}
+      />
+
+      <ConfirmDialog
+        isOpen={showResetConfirm}
+        title="Reset Project Memory?"
+        message="This will permanently delete the AI Assistant, all conversation history, and documents from Backboard IO for this project. This cannot be undone."
+        confirmText="Reset Everything"
+        cancelText="Cancel"
+        isDangerous={true}
+        onConfirm={handleResetProject}
+        onCancel={() => setShowResetConfirm(false)}
+        isLoading={isResetting}
       />
     </div>
   );

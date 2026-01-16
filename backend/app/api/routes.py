@@ -92,6 +92,21 @@ def remove_document_from_mapping(project_id: str, document_id: str):
     except Exception as e:
         logger.error(f"Error removing document from mapping: {e}")
         return False
+
+def delete_project_mapping(project_id: str):
+    """Delete the entire mapping for a project"""
+    try:
+        mappings = load_mappings()
+        if project_id in mappings:
+            del mappings[project_id]
+            path = get_mappings_path()
+            path.write_text(json.dumps(mappings, indent=2))
+            logger.info(f"Deleted mapping for {project_id}")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Error deleting project mapping: {e}")
+        return False
  
 
 # --- Dependency Injection ---
@@ -266,3 +281,33 @@ async def feedback_endpoint(feedback: FeedbackRequest):
     
     # In a real app, save to database. For now, we log it.
     return {"status": "success", "message": "Feedback recorded"}
+
+@router.delete("/reset")
+async def reset_project_endpoint(project_id: str = Query(...)):
+    """
+    Hard reset a project: Deletes the Backboard Assistant (clearing memories/docs)
+    and removes the local mapping. Next interaction will create a fresh assistant.
+    """
+    logger.warning(f"💣 RESET REQUESTED FOR PROJECT: {project_id}")
+    try:
+        # 1. Try to get the assistant wrapper.
+        #    If it fails (e.g., config missing, bad ID), we still try to clean up mappings.
+        try:
+            assistant = await get_assistant(project_id)
+            if assistant:
+                await assistant.hard_reset_assistant()
+        except Exception as e:
+            logger.error(f"Error connecting to assistant during reset: {e}. Proceeding to clear local mapping.")
+
+        # 2. Clear in-memory cache
+        if project_id in project_assistants:
+            del project_assistants[project_id]
+
+        # 3. Clear JSON persistence
+        delete_project_mapping(project_id)
+        
+        return {"status": "success", "message": f"Project {project_id} has been reset."}
+
+    except Exception as e:
+        logger.error(f"Reset failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
