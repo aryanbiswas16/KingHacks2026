@@ -7,3 +7,5 @@ env/
 venv/
 data/uploads/
 .DS_Store
+backend/app/services/__pycache__/
+data/project_mappings.json

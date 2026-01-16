@@ -2,11 +2,13 @@ import shutil
 import os
 import json
 import logging
+import mimetypes
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Query, Depends
+from fastapi.responses import FileResponse
 from ..services.assistant import ConsultingAssistant
 from ..models.domain import ConsultingContext
 from ..core.config import settings
@@ -315,10 +317,18 @@ async def chat_endpoint(
         assistant = await get_assistant(project_id)
         # response is a dict with 'response' and 'citations'
         result = await assistant.chat(message)
+        mappings = load_mappings()
+        available_documents = [doc.get("name") for doc in mappings.get(project_id, {}).get("documents", []) if doc.get("name")]
+        citations = result.get("citations", [])
+        if not citations and available_documents:
+            response_text = result.get("response", "")
+            response_lower = response_text.lower()
+            citations = [doc for doc in available_documents if doc.lower() in response_lower]
         
         return {
             "response": result["response"], 
-            "citations": result.get("citations", []),
+            "citations": citations,
+            "available_documents": available_documents,
             "project_id": project_id
         }
     except Exception as e:
@@ -367,3 +377,25 @@ async def reset_project_endpoint(project_id: str = Query(...)):
     except Exception as e:
         logger.error(f"Reset failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/files/{project_id}/{filename}")
+async def get_file_content(project_id: str, filename: str):
+    """
+    Serve the content of a project file for preview.
+    """
+    file_path = Path(settings.UPLOAD_DIR) / project_id / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+        
+    mime_type, _ = mimetypes.guess_type(str(file_path))
+    if not mime_type:
+        mime_type = "application/octet-stream"
+
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+        media_type=mime_type,
+        headers={"Content-Disposition": f"inline; filename=\"{filename}\""}
+    )

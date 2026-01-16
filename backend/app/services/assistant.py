@@ -34,6 +34,7 @@ class MessageResponseObj(BaseModel):
     run_id: Optional[str] = None
     tool_calls: Optional[List[Dict]] = None
     citations: Optional[List[Dict]] = None
+    attachments: Optional[List[Any]] = None  # Add this field to capture attachment data from API response
 
 class DocumentObj(BaseModel):
     document_id: str
@@ -561,21 +562,49 @@ Use it to help close the deal and deliver consulting value.
                 # llm_provider="featherless",
                 # model_name="12thD/ko-Llama-3-8B-sft-v0.3",
                 memory="Auto",
-                stream=False
+                stream=False,
+                web_search="Auto" # Enable web search if needed
             )
+            
+            logger.info(f"🔍 Raw LLM Response keys: {response.model_dump().keys()}")
+            if response.attachments:
+                logger.info(f"📄 Response attachments: {len(response.attachments)}")
             
             full_response = response.content
             logger.info(f"🤖 Assistant: {full_response}")
             
-            # --- SIMULATED CITATIONS FOR PROTOTYPE ---
-            # In a real scenario, Backboard might return these in a 'metadata' field.
-            citations = response.citations if response.citations else []
-            if not citations and self.context and self.context.available_documents:
-                # Naive: Just return all or a random subset to show UI capability
-                import random
-                num_citations = random.randint(1, min(3, len(self.context.available_documents)))
-                citations = random.sample(self.context.available_documents, num_citations)
+            # --- EXTRACT ATTACHMENTS FOR CITATIONS ---
+            # Extract attachments (documents used) from the response object
+            citations = []
             
+            # Check attachments (handling both objects and dicts)
+            if response.attachments:
+                for attachment in response.attachments:
+                     # attachment might be a Pydantic model or a dict depending on how it was parsed
+                     if isinstance(attachment, dict):
+                         fname = attachment.get('filename')
+                     else:
+                         fname = getattr(attachment, 'filename', None)
+                         
+                     if fname:
+                         citations.append(fname)
+            
+            # Check for 'citations' field explicitly if it exists
+            if hasattr(response, 'citations') and response.citations:
+                for cite in response.citations:
+                    if isinstance(cite, dict):
+                         fname = cite.get('filename') or cite.get('document_name')
+                    else:
+                         fname = getattr(cite, 'filename', getattr(cite, 'document_name', None))
+                    
+                    if fname and fname not in citations:
+                        citations.append(fname)
+
+            # Fallback to context docs if no specific attachments returned but we have context
+            if not citations and self.context and self.context.available_documents:
+                 # Only fallback if the response implies document usage, otherwise we might over-cite
+                 pass
+
             return {
                 "response": full_response,
                 "citations": citations
