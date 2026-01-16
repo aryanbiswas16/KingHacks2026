@@ -38,6 +38,26 @@
         "size_formatted": "2.3 KB",
         "is_transcript": true,
         "uploaded_at": "2026-01-15T23:13:19.471203"
+      },
+      {
+        "name": "Client_Meeting_2026-01-16_06-55-47.txt",
+        "id": "79a5cd62-4193-4fea-b568-6b5a0127008f",
+        "status": "indexed",
+        "file_type": "Text",
+        "file_size": 20717,
+        "size_formatted": "20.2 KB",
+        "is_transcript": true,
+        "uploaded_at": "2026-01-16T01:55:54.373615"
+      },
+      {
+        "name": "Client_Meeting_2026-01-16_07-08-07.txt",
+        "id": "3d5c7ae4-6cde-4afb-b4b3-25968c5dd824",
+        "status": "indexed",
+        "file_type": "Text",
+        "file_size": 153,
+        "size_formatted": "153.0 B",
+        "is_transcript": true,
+        "uploaded_at": "2026-01-16T02:08:10.960347"
       }
     ]
   }

@@ -15,5 +15,6 @@ class Settings:
     DATA_DIR: str = "data"
     MAPPING_FILE: str = os.path.join(DATA_DIR, "project_mappings.json")
     UPLOAD_DIR: str = os.path.join(DATA_DIR, "uploads")
+    TRANSCRIPT_DIR: str = os.path.join(DATA_DIR, "transcripts")
     
 settings = Settings()
