@@ -367,13 +367,21 @@ class ConsultingAssistant:
         self.context = context
         logger.info(f"✓ Loaded existing session: Assistant {assistant_id}, Thread {thread_id}")
 
+    async def refresh_thread(self):
+        """
+        Refresh the thread context from Backboard to pick up newly uploaded documents.
+        This is called before each chat to ensure the assistant has the latest documents.
+        """
+        if self.user_thread:
+            self.user_thread = await self.client.get_thread(self.user_thread.thread_id)
+            logger.info(f"≡ƒöä Thread context refreshed: {self.user_thread.thread_id}")
+
     def _generate_system_prompt(self, context: ConsultingContext) -> str:
         """
         Create personalized system prompt with project context
         """
         stakeholders_str = "\n  ".join([f"{s['name']}: {s['role']} [{s.get('buying_role', 'Influencer')}] - Care about: {s.get('interest', 'N/A')}" for s in context.key_stakeholders])
         goals_str = "\n  ".join(context.success_criteria)
-        docs_str = "\n  ".join(context.available_documents)
         pain_points_str = "\n  ".join(context.client_pain_points)
         objections_str = "\n  ".join(context.key_objections)
         competitors_str = ", ".join(context.competitors)
@@ -408,9 +416,6 @@ CRITICAL ENGAGEMENT CONTEXT (Always reference this)
   Competitors: {competitors_str}
   Known Objections: {objections_str}
 
-📂 AVAILABLE CONTEXT DOCUMENTS:
-  {docs_str}
-
 ═══════════════════════════════════════════════════════════
 YOUR RESPONSIBILITIES
 ═══════════════════════════════════════════════════════════
@@ -424,7 +429,8 @@ YOUR RESPONSIBILITIES
 2. CONSULTATIVE INSIGHT
    - Connect client pain points to our solution value
    - Identify risks to project success or deal closing
-   - Synthesize "Executive Summaries" from transcripts
+    - Synthesize "Executive Summaries" from uploaded documents and transcripts
+    - Reference specific information from available documents when relevant
 
 3. REMEMBER CONTEXT
    - Never forget who holds the budget vs. who is a technical recommender
@@ -437,7 +443,8 @@ YOUR RESPONSIBILITIES
    - Propose agendas for next steps
 
 ═══════════════════════════════════════════════════════════
-IMPORTANT: You have access to this project's full context via memory.
+IMPORTANT: You have access to this project's full context via memory
+and uploaded documents. Always use the most current documents available.
 Use it to help close the deal and deliver consulting value.
 ═══════════════════════════════════════════════════════════
 """
@@ -554,10 +561,19 @@ Use it to help close the deal and deliver consulting value.
         logger.info(f"💬 User: {user_message}")
         
         try:
+            # Build message with available documents context prepended
+            # This ensures the AI knows about current documents even if system prompt is old
+            message_to_send = user_message
+            if self.context and self.context.available_documents:
+                docs_list = "\n  • ".join(self.context.available_documents)
+                document_context = f"[Available documents for reference: \n  • {docs_list}]\n\n"
+                message_to_send = document_context + user_message
+                logger.info(f"≡ƒôé Prepended document context: {', '.join(self.context.available_documents)}")
+            
             # Send message with memory enabled
             response = await self.client.add_message(
                 thread_id=self.user_thread.thread_id,
-                content=user_message,
+                content=message_to_send,
                 # Use assistant default or system default (likely OpenAI GPT-4o)
                 # llm_provider="featherless",
                 # model_name="12thD/ko-Llama-3-8B-sft-v0.3",
@@ -577,33 +593,52 @@ Use it to help close the deal and deliver consulting value.
             # Extract attachments (documents used) from the response object
             citations = []
             
+            logger.info(f"≡ƒöì Extracting citations from response object...")
+            logger.info(f"   Response object type: {type(response)}")
+            logger.info(f"   Response fields: {response.model_dump().keys() if hasattr(response, 'model_dump') else dir(response)}")
+            
             # Check attachments (handling both objects and dicts)
-            if response.attachments:
-                for attachment in response.attachments:
-                     # attachment might be a Pydantic model or a dict depending on how it was parsed
-                     if isinstance(attachment, dict):
-                         fname = attachment.get('filename')
-                     else:
-                         fname = getattr(attachment, 'filename', None)
-                         
-                     if fname:
-                         citations.append(fname)
+            if hasattr(response, 'attachments') and response.attachments:
+                logger.info(f"   ✓ Has attachments: {response.attachments}")
+                if response.attachments:
+                    for attachment in response.attachments:
+                         # attachment might be a Pydantic model or a dict depending on how it was parsed
+                         if isinstance(attachment, dict):
+                             fname = attachment.get('filename')
+                         else:
+                             fname = getattr(attachment, 'filename', None)
+                             
+                         if fname:
+                             citations.append(fname)
+                             logger.info(f"     • Added citation: {fname}")
             
             # Check for 'citations' field explicitly if it exists
             if hasattr(response, 'citations') and response.citations:
-                for cite in response.citations:
-                    if isinstance(cite, dict):
-                         fname = cite.get('filename') or cite.get('document_name')
-                    else:
-                         fname = getattr(cite, 'filename', getattr(cite, 'document_name', None))
-                    
-                    if fname and fname not in citations:
-                        citations.append(fname)
+                logger.info(f"   ✓ Has citations field: {response.citations}")
+                if response.citations:
+                    for cite in response.citations:
+                        if isinstance(cite, dict):
+                             fname = cite.get('filename') or cite.get('document_name')
+                        else:
+                             fname = getattr(cite, 'filename', getattr(cite, 'document_name', None))
+                        
+                        if fname and fname not in citations:
+                            citations.append(fname)
+                            logger.info(f"     • Added citation: {fname}")
 
-            # Fallback to context docs if no specific attachments returned but we have context
-            if not citations and self.context and self.context.available_documents:
-                 # Only fallback if the response implies document usage, otherwise we might over-cite
-                 pass
+            # FALLBACK: If Backboard didn't return structured citations, extract from response text
+            # This handles cases where the AI references documents by name in the response
+            if not citations and self.context:
+                logger.info("   ↳ No structured citations. Attempting to extract from response text...")
+                logger.info(f"   ≡ƒôé Available documents in context: {self.context.available_documents}")
+                response_lower = full_response.lower()
+                for doc in self.context.available_documents:
+                    doc_lower = doc.lower()
+                    if doc_lower in response_lower:
+                        citations.append(doc)
+                        logger.info(f"     • Found in text: {doc}")
+            
+            logger.info(f"≡ƒôï Final citations: {citations}")
 
             return {
                 "response": full_response,

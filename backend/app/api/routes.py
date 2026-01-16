@@ -3,18 +3,27 @@ import os
 import json
 import logging
 import mimetypes
+import asyncio
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Query, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from ..services.assistant import ConsultingAssistant
 from ..models.domain import ConsultingContext
 from ..core.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# In-memory queues for live transcript streaming
+transcript_queues: Dict[str, asyncio.Queue] = {}
+active_transcript_target: Dict[str, Optional[str]] = {
+    "project_id": None,
+    "meeting_url": None,
+    "started_at": None
+}
 
 # --- Helper Functions ---
 
@@ -46,6 +55,22 @@ def format_file_size(bytes_size: int) -> str:
             return f"{bytes_size:.1f} {unit}"
         bytes_size /= 1024.0
     return f"{bytes_size:.1f} TB"
+
+def get_transcript_queue(project_id: str) -> asyncio.Queue:
+    if project_id not in transcript_queues:
+        transcript_queues[project_id] = asyncio.Queue()
+    return transcript_queues[project_id]
+
+class TranscriptChunk(BaseModel):
+    project_id: str
+    speaker: Optional[str] = None
+    text: str
+    meeting_url: Optional[str] = None
+    timestamp: Optional[str] = None
+
+class TranscriptStart(BaseModel):
+    project_id: str
+    meeting_url: Optional[str] = None
 
 # --- Persistence Layer (Simple JSON storage) ---
 # In a real app, this would be a separate Repository class using a DB.
@@ -148,6 +173,16 @@ def delete_project_mapping(project_id: str):
 # In-memory store for active assistant instances
 project_assistants: Dict[str, ConsultingAssistant] = {}
 
+async def clear_assistant_cache(project_id: str = None):
+    """Clear the in-memory assistant cache for a project or all projects."""
+    if project_id:
+        if project_id in project_assistants:
+            del project_assistants[project_id]
+            logger.info(f"Cleared assistant cache for {project_id}")
+    else:
+        project_assistants.clear()
+        logger.info("Cleared all assistant caches")
+
 async def get_assistant(project_id: str) -> ConsultingAssistant:
     """Dependency to get or create an assistant for a project."""
     if project_id in project_assistants:
@@ -166,12 +201,13 @@ async def get_assistant(project_id: str) -> ConsultingAssistant:
         logger.info(f"Loading existing session for Project ID: {project_id}")
         
         # Hydrate a default context if we don't have one stored
-        # Improvements: Store the 'context' JSON in mappings as well!
+        # Populate available_documents from the mappings so citations can be extracted
+        available_docs = [doc.get("name") for doc in data.get("documents", []) if doc.get("name")]
         default_context = ConsultingContext(
             user_id="web_user", username="Web User", role="Visitor", industry="Tech",
             project_name=f"Project {project_id}", sales_stage="Unknown", deal_size="Unknown",
             success_criteria=[], timeline="Unknown", competitors=[], client_pain_points=[],
-            key_stakeholders=[], team_members=[], available_documents=[], key_objections=[]
+            key_stakeholders=[], team_members=[], available_documents=available_docs, key_objections=[]
         )
         
         try:
@@ -299,6 +335,10 @@ async def delete_document(
         
         # Remove from mappings
         remove_document_from_mapping(project_id, document_id)
+
+        # Clear the assistant cache so it reloads with updated documents
+        await clear_assistant_cache(project_id)
+        logger.info(f"Cleared assistant cache for {project_id} after document deletion")
         
         return result
     except HTTPException:
@@ -315,20 +355,28 @@ async def chat_endpoint(
     logger.info(f"Chat request for {project_id}")
     try:
         assistant = await get_assistant(project_id)
+
+        # Refresh context's available_documents from current mappings
+        # This ensures the assistant knows about newly uploaded or removed documents
+        mappings = load_mappings()
+        current_documents = [doc.get("name") for doc in mappings.get(project_id, {}).get("documents", []) if doc.get("name")]
+        if assistant.context:
+            assistant.context.available_documents = current_documents
+            logger.info(f"Updated context documents: {current_documents}")
+
+        # Refresh thread to pick up newly uploaded documents in Backboard
+        await assistant.refresh_thread()
+
         # response is a dict with 'response' and 'citations'
         result = await assistant.chat(message)
-        mappings = load_mappings()
-        available_documents = [doc.get("name") for doc in mappings.get(project_id, {}).get("documents", []) if doc.get("name")]
+
+        # Use citations directly from Backboard's response - no fallback guessing
         citations = result.get("citations", [])
-        if not citations and available_documents:
-            response_text = result.get("response", "")
-            response_lower = response_text.lower()
-            citations = [doc for doc in available_documents if doc.lower() in response_lower]
         
         return {
             "response": result["response"], 
             "citations": citations,
-            "available_documents": available_documents,
+            "available_documents": current_documents,
             "project_id": project_id
         }
     except Exception as e:
@@ -399,3 +447,76 @@ async def get_file_content(project_id: str, filename: str):
         media_type=mime_type,
         headers={"Content-Disposition": f"inline; filename=\"{filename}\""}
     )
+
+
+@router.post("/transcript/start")
+async def start_transcript(target: TranscriptStart):
+    """
+    Set the active project for live transcript ingestion.
+    """
+    active_transcript_target["project_id"] = target.project_id
+    active_transcript_target["meeting_url"] = target.meeting_url
+    active_transcript_target["started_at"] = datetime.utcnow().isoformat()
+    return {"status": "ok", "active": active_transcript_target}
+
+
+@router.post("/transcript/stop")
+async def stop_transcript():
+    """
+    Clear the active project for live transcript ingestion.
+    """
+    active_transcript_target["project_id"] = None
+    active_transcript_target["meeting_url"] = None
+    active_transcript_target["started_at"] = None
+    return {"status": "ok", "active": active_transcript_target}
+
+
+@router.get("/transcript/active")
+async def get_active_transcript():
+    """
+    Get the current active project for live transcript ingestion.
+    """
+    return {"status": "ok", "active": active_transcript_target}
+
+
+@router.post("/transcript")
+async def ingest_transcript(chunk: TranscriptChunk):
+    """
+    Ingest live transcript chunks and stream them to subscribers.
+    """
+    try:
+        queue = get_transcript_queue(chunk.project_id)
+        payload = {
+            "speaker": chunk.speaker or "Unknown",
+            "text": chunk.text,
+            "meeting_url": chunk.meeting_url,
+            "timestamp": chunk.timestamp or datetime.utcnow().isoformat()
+        }
+
+        # Append to local transcript file for persistence
+        upload_dir = Path(settings.UPLOAD_DIR) / chunk.project_id
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        transcript_path = upload_dir / "live_transcript.txt"
+        with transcript_path.open("a", encoding="utf-8") as f:
+            f.write(f"[{payload['timestamp']}] {payload['speaker']}: {payload['text']}\n")
+
+        await queue.put(payload)
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Error ingesting transcript: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/transcript/stream")
+async def stream_transcript(project_id: str = Query(...)):
+    """
+    Stream live transcript chunks via Server-Sent Events (SSE).
+    """
+    queue = get_transcript_queue(project_id)
+
+    async def event_generator():
+        while True:
+            payload = await queue.get()
+            yield f"data: {json.dumps(payload)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

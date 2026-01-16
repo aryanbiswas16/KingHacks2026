@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Meet Transcript</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Meet Transcript</h1>
+        <p>Turn on captions in Google Meet first.</p>
+      </header>
+
+      <div class="controls">
+        <button id="startBtn" class="btn btn-green">Start</button>
+        <button id="stopBtn" class="btn btn-red" disabled>Stop</button>
+        <button id="clearBtn" class="btn btn-ghost">Clear</button>
+      </div>
+
+      <div class="status" id="status">Idle</div>
+
+      <div class="transcript" id="transcript"></div>
+
+      <button id="copyBtn" class="btn btn-dark">Copy Transcript</button>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

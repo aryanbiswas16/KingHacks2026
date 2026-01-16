@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Meet Transcript Scraper",
+  "version": "0.1.0",
+  "description": "Scrape Google Meet captions and build a transcript.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://meet.google.com/*",
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
+  ],
+  "action": {
+    "default_title": "Meet Transcript"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

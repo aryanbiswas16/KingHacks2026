@@ -223,34 +223,6 @@ export function ChatInterface({ projectId, projectName, messages, setMessages }:
                 </div>
               )}
 
-              {msg.role === 'assistant' && (!msg.citations || msg.citations.length === 0) && (
-                <div className="mt-4 pt-3 border-t border-slate-200">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Sources Referenced</p>
-                  {msg.availableDocuments && msg.availableDocuments.length > 0 ? (
-                    <div>
-                      <p className="text-xs text-slate-500 mb-2">No explicit sources were returned. Available documents:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {msg.availableDocuments.map((doc, i) => (
-                          <button
-                            key={`${doc}-${i}`}
-                            onClick={() => setPreviewFile({
-                              name: doc,
-                              url: `http://localhost:8000/api/v1/files/${projectId}/${doc}`
-                            })}
-                            className="flex items-center gap-1.5 text-xs bg-slate-50 text-blue-600 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-blue-50 hover:border-blue-200 transition-all"
-                          >
-                            <FileText className="w-3 h-3" />
-                            <span className="truncate max-w-[150px]">{doc}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-500">No sources provided.</p>
-                  )}
-                </div>
-              )}
-
               {msg.role === 'assistant' && (
                 <div className="mt-3 flex justify-end gap-1">
                    <button 
