@@ -17,9 +17,10 @@ interface ChatInterfaceProps {
   projectName: string;
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  containerClassName?: string;
 }
 
-export function ChatInterface({ projectId, projectName, messages, setMessages }: ChatInterfaceProps) {
+export function ChatInterface({ projectId, projectName, messages, setMessages, containerClassName }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [previewFile, setPreviewFile] = useState<{ name: string; url: string } | null>(null);
@@ -154,8 +155,10 @@ export function ChatInterface({ projectId, projectName, messages, setMessages }:
     }
   };
 
+  const heightClassName = containerClassName ?? "h-[700px]";
+
   return (
-    <div className="flex flex-col h-[700px] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className={`flex flex-col ${heightClassName} bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden`}>
       {/* Header */}
       <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
         <div className="flex items-center gap-2">

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Mic, ArrowLeft, Circle, Clipboard } from "lucide-react";
+import { ChatInterface, type Message } from "../../../components/ChatInterface";
 
 export default function LiveTranscriptionPage() {
   const params = useParams<{ projectId: string }>();
@@ -14,6 +15,7 @@ export default function LiveTranscriptionPage() {
   const [transcript, setTranscript] = useState("");
   const [shareError, setShareError] = useState("");
   const [sharedStream, setSharedStream] = useState<MediaStream | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -77,6 +79,21 @@ export default function LiveTranscriptionPage() {
     }
   };
 
+  const handleSaveTranscript = () => {
+    const content = transcript || "";
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `${projectId || "live-transcript"}-${timestamp}.txt`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const handleToggle = async () => {
     if (isLive) {
       await stopStreaming();
@@ -136,8 +153,8 @@ export default function LiveTranscriptionPage() {
   }, [sharedStream]);
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between shadow-sm">
+    <div className="min-h-screen bg-slate-100 flex flex-col">
+      <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="text-slate-500 hover:text-slate-700 flex items-center gap-2 text-sm">
             <ArrowLeft className="w-4 h-4" />
@@ -150,83 +167,53 @@ export default function LiveTranscriptionPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto p-8">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-xl font-semibold text-slate-900 flex items-center gap-2">
-                <Mic className="w-5 h-5 text-emerald-600" />
-                Live Transcription
-              </h2>
-              <p className="text-sm text-slate-500 mt-1">
-                Use this page to capture a Google Meet transcription and provide live context to the agent.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <Circle className={`w-2 h-2 ${isLive ? "text-emerald-500" : "text-slate-300"}`} />
-                {isLive ? "Live" : "Idle"}
-              </div>
-              <button
-                onClick={handleToggle}
-                disabled={isStarting || !projectId}
-                className={`px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors ${
-                  isLive ? "bg-red-600 hover:bg-red-700" : "bg-emerald-600 hover:bg-emerald-700"
-                }`}
-              >
-                {isLive ? "Stop" : isStarting ? "Starting..." : "Start"}
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Google Meet Link
-                </label>
-                <input
-                  value={meetingUrl}
-                  onChange={(e) => setMeetingUrl(e.target.value)}
-                  placeholder="https://meet.google.com/xxx-xxxx-xxx"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+      <main className="flex-1 overflow-hidden p-4 h-[calc(100vh-72px)]">
+        <div className="h-full grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4">
+          <div className="flex flex-col gap-4 h-full">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+              <div className="relative aspect-video w-full max-w-none rounded-lg border border-slate-200 bg-slate-900/90 overflow-hidden">
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-contain"
+                  muted
+                  playsInline
+                  autoPlay
                 />
-              </div>
-
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Shared Video</p>
-                  <span className={`text-xs font-medium ${isLive ? "text-emerald-600" : "text-slate-400"}`}>
-                    {isLive ? "Streaming" : "Not shared"}
-                  </span>
-                </div>
-                <div className="relative aspect-video rounded-lg border border-slate-200 bg-slate-900/90 overflow-hidden">
-                  <video
-                    ref={videoRef}
-                    className="w-full h-full object-contain"
-                    muted
-                    playsInline
-                    autoPlay
-                  />
-                  {!isLive && (
-                    <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-300 px-4 text-center">
-                      Click Start and select the Google Meet tab to share video here.
-                    </div>
-                  )}
-                </div>
-                {shareError && (
-                  <p className="text-xs text-red-600 mt-2">{shareError}</p>
+                {!isLive && (
+                  <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-300 px-4 text-center">
+                    Click Start and select the Google Meet tab to share video here.
+                  </div>
                 )}
               </div>
-
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                <p className="text-xs text-slate-600">
-                  This page is ready for a transcription feed. Connect your capture source and paste live transcript below.
-                </p>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                  <Mic className="w-5 h-5 text-emerald-600" />
+                  Live Transcription
+                </h2>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <Circle className={`w-2 h-2 ${isLive ? "text-emerald-500" : "text-slate-300"}`} />
+                    {isLive ? "Live" : "Idle"}
+                  </div>
+                  <button
+                    onClick={handleToggle}
+                    disabled={isStarting || !projectId}
+                    className={`px-5 py-2.5 rounded-xl text-base font-semibold text-white transition-colors shadow-sm ${
+                      isLive
+                        ? "bg-red-600 hover:bg-red-700"
+                        : "bg-emerald-600 hover:bg-emerald-700"
+                    }`}
+                  >
+                    {isLive ? "Stop" : isStarting ? "Starting..." : "Start"}
+                  </button>
+                </div>
               </div>
+              {shareError && (
+                <p className="text-xs text-red-600 mt-2">{shareError}</p>
+              )}
             </div>
 
-            <div>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col min-h-[200px] flex-1">
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                 Live Transcript
               </label>
@@ -234,17 +221,27 @@ export default function LiveTranscriptionPage() {
                 value={transcript}
                 onChange={(e) => setTranscript(e.target.value)}
                 placeholder="Paste or stream live transcript here..."
-                rows={12}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                className="flex-1 w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
               <div className="flex justify-end mt-3">
                 <button
                   className="px-4 py-2 text-sm font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800"
+                  onClick={handleSaveTranscript}
                 >
-                  Send Transcript to Agent
+                  Save Transcript
                 </button>
               </div>
             </div>
+          </div>
+
+          <div className="h-full">
+            <ChatInterface
+              projectId={projectId || ""}
+              projectName={projectId || "Live Session"}
+              messages={messages}
+              setMessages={setMessages}
+              containerClassName="h-full"
+            />
           </div>
         </div>
       </main>
