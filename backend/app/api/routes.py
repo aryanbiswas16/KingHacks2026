@@ -148,6 +148,16 @@ def delete_project_mapping(project_id: str):
 # In-memory store for active assistant instances
 project_assistants: Dict[str, ConsultingAssistant] = {}
 
+async def clear_assistant_cache(project_id: str = None):
+    """Clear the in-memory assistant cache for a project or all projects."""
+    if project_id:
+        if project_id in project_assistants:
+            del project_assistants[project_id]
+            logger.info(f"Cleared assistant cache for {project_id}")
+    else:
+        project_assistants.clear()
+        logger.info("Cleared all assistant caches")
+
 async def get_assistant(project_id: str) -> ConsultingAssistant:
     """Dependency to get or create an assistant for a project."""
     if project_id in project_assistants:
@@ -166,12 +176,13 @@ async def get_assistant(project_id: str) -> ConsultingAssistant:
         logger.info(f"Loading existing session for Project ID: {project_id}")
         
         # Hydrate a default context if we don't have one stored
-        # Improvements: Store the 'context' JSON in mappings as well!
+        # Populate available_documents from the mappings so citations can be extracted
+        available_docs = [doc.get("name") for doc in data.get("documents", []) if doc.get("name")]
         default_context = ConsultingContext(
             user_id="web_user", username="Web User", role="Visitor", industry="Tech",
             project_name=f"Project {project_id}", sales_stage="Unknown", deal_size="Unknown",
             success_criteria=[], timeline="Unknown", competitors=[], client_pain_points=[],
-            key_stakeholders=[], team_members=[], available_documents=[], key_objections=[]
+            key_stakeholders=[], team_members=[], available_documents=available_docs, key_objections=[]
         )
         
         try:
@@ -300,6 +311,10 @@ async def delete_document(
         # Remove from mappings
         remove_document_from_mapping(project_id, document_id)
         
+        # Clear the assistant cache so it reloads with updated documents
+        await clear_assistant_cache(project_id)
+        logger.info(f"Cleared assistant cache for {project_id} after document deletion")
+        
         return result
     except HTTPException:
         raise
@@ -315,20 +330,28 @@ async def chat_endpoint(
     logger.info(f"Chat request for {project_id}")
     try:
         assistant = await get_assistant(project_id)
+        
+        # Refresh context's available_documents from current mappings
+        # This ensures the assistant knows about newly uploaded or removed documents
+        mappings = load_mappings()
+        current_documents = [doc.get("name") for doc in mappings.get(project_id, {}).get("documents", []) if doc.get("name")]
+        if assistant.context:
+            assistant.context.available_documents = current_documents
+            logger.info(f"Updated context documents: {current_documents}")
+        
+        # Refresh thread to pick up newly uploaded documents in Backboard
+        await assistant.refresh_thread()
+        
         # response is a dict with 'response' and 'citations'
         result = await assistant.chat(message)
-        mappings = load_mappings()
-        available_documents = [doc.get("name") for doc in mappings.get(project_id, {}).get("documents", []) if doc.get("name")]
+        
+        # Use citations directly from Backboard's response - no fallback guessing
         citations = result.get("citations", [])
-        if not citations and available_documents:
-            response_text = result.get("response", "")
-            response_lower = response_text.lower()
-            citations = [doc for doc in available_documents if doc.lower() in response_lower]
         
         return {
             "response": result["response"], 
             "citations": citations,
-            "available_documents": available_documents,
+            "available_documents": current_documents,
             "project_id": project_id
         }
     except Exception as e:

@@ -4,30 +4,30 @@
     "thread_id": "fe7d336b-9432-4176-b9aa-44af8f6d46cf",
     "documents": []
   },
-  "proj_global_cloud": {
-    "assistant_id": "1ca67ea7-9979-457d-bdec-3787edf0a491",
-    "thread_id": "d9e583c3-bdd9-4636-a872-6e09367f3d00",
-    "documents": [
-      {
-        "name": "ACME_Discovery_Call_Teams_Transcript.txt",
-        "id": "91e0a514-b0a9-42c4-8c91-1a60fa62f9d2",
-        "status": "indexed",
-        "file_type": "Text",
-        "file_size": 2348,
-        "size_formatted": "2.3 KB",
-        "is_transcript": true,
-        "uploaded_at": "2026-01-15T19:37:12.075312"
-      }
-    ]
-  },
   "proj_start_scale": {
     "assistant_id": "b9afed29-1e11-4f86-bb7a-2da5b9068beb",
     "thread_id": "9fbd4d5d-953d-41cf-9c7d-c43414762a7d",
     "documents": []
   },
+  "proj_global_cloud": {
+    "assistant_id": "d13cf29e-416b-49d8-a442-e398457bbe14",
+    "thread_id": "5373bdb3-653d-4be4-a1b1-ded7b0931555",
+    "documents": [
+      {
+        "name": "ACME_Discovery_Call_Teams_Transcript.txt",
+        "id": "ef8f0b4a-53c2-4eca-8ed9-202c26f0b2cb",
+        "status": "indexed",
+        "file_type": "Text",
+        "file_size": 2348,
+        "size_formatted": "2.3 KB",
+        "is_transcript": true,
+        "uploaded_at": "2026-01-15T21:34:47.932043"
+      }
+    ]
+  },
   "proj_global_pay": {
-    "assistant_id": "ad88c94f-f724-4fb9-bdc9-3670e2813e1e",
-    "thread_id": "968a518d-1928-41a9-954a-905d2f25ffad",
+    "assistant_id": "5c0549dc-1f44-41ed-96e7-835cfb0a072f",
+    "thread_id": "7f60a089-45f4-421c-b638-4cbbdb452f15",
     "documents": []
   }
 }
