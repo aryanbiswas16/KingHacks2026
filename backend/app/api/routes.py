@@ -3,6 +3,7 @@ import os
 import json
 import logging
 import mimetypes
+import re
 import asyncio
 from pathlib import Path
 from datetime import datetime
@@ -56,6 +57,30 @@ def format_file_size(bytes_size: int) -> str:
         bytes_size /= 1024.0
     return f"{bytes_size:.1f} TB"
 
+def sanitize_meeting_name(name: Optional[str]) -> str:
+    base = (name or "").strip()
+    if not base:
+        base = "meeting"
+    safe = re.sub(r"[^a-zA-Z0-9_-]+", "_", base).strip("_")
+    return safe or "meeting"
+
+def format_meeting_datetime(date_str: Optional[str]) -> str:
+    if date_str:
+        try:
+            normalized = date_str.replace("Z", "+00:00") if date_str.endswith("Z") else date_str
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            parsed = datetime.now()
+    else:
+        parsed = datetime.now()
+    return parsed.strftime("%Y-%m-%d_%H-%M-%S")
+
+def get_transcript_upload_path(project_id: str, meeting_name: Optional[str], meeting_datetime: Optional[str]) -> Path:
+    safe_name = sanitize_meeting_name(meeting_name)
+    timestamp = format_meeting_datetime(meeting_datetime)
+    filename = f"{safe_name}_{timestamp}.txt"
+    return Path(settings.TRANSCRIPT_DIR) / project_id / filename
+
 def get_transcript_queue(project_id: str) -> asyncio.Queue:
     if project_id not in transcript_queues:
         transcript_queues[project_id] = asyncio.Queue()
@@ -71,6 +96,12 @@ class TranscriptChunk(BaseModel):
 class TranscriptStart(BaseModel):
     project_id: str
     meeting_url: Optional[str] = None
+
+class TranscriptUploadRequest(BaseModel):
+    project_id: str
+    meeting_name: Optional[str] = None
+    meeting_datetime: Optional[str] = None
+    transcript: str
 
 # --- Persistence Layer (Simple JSON storage) ---
 # In a real app, this would be a separate Repository class using a DB.
@@ -433,9 +464,12 @@ async def get_file_content(project_id: str, filename: str):
     Serve the content of a project file for preview.
     """
     file_path = Path(settings.UPLOAD_DIR) / project_id / filename
-    
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
+        transcript_path = Path(settings.TRANSCRIPT_DIR) / project_id / filename
+        if transcript_path.exists():
+            file_path = transcript_path
+        else:
+            raise HTTPException(status_code=404, detail="File not found")
         
     mime_type, _ = mimetypes.guess_type(str(file_path))
     if not mime_type:
@@ -469,6 +503,46 @@ async def stop_transcript():
     active_transcript_target["meeting_url"] = None
     active_transcript_target["started_at"] = None
     return {"status": "ok", "active": active_transcript_target}
+
+
+@router.post("/transcript/upload")
+async def upload_transcript(request: TranscriptUploadRequest):
+    """
+    Upload a completed transcript into Backboard RAG with a meeting-name + datetime filename.
+    """
+    if not request.transcript.strip():
+        raise HTTPException(status_code=400, detail="Transcript is empty")
+
+    try:
+        assistant = await get_assistant(request.project_id)
+        transcript_path = get_transcript_upload_path(
+            request.project_id,
+            request.meeting_name,
+            request.meeting_datetime
+        )
+        transcript_path.parent.mkdir(parents=True, exist_ok=True)
+        transcript_path.write_text(request.transcript.strip(), encoding="utf-8")
+
+        results = await assistant.upload_project_documents([str(transcript_path)])
+
+        file_size = transcript_path.stat().st_size
+        file_type = get_file_type(transcript_path.name)
+        uploaded_at = datetime.now().isoformat()
+
+        for result in results:
+            if result.get("name") == transcript_path.name:
+                result["file_type"] = file_type
+                result["file_size"] = file_size
+                result["size_formatted"] = format_file_size(file_size)
+                result["is_transcript"] = True
+                result["uploaded_at"] = uploaded_at
+
+        add_documents_to_mapping(request.project_id, results)
+
+        return {"status": "success", "results": results, "project_id": request.project_id}
+    except Exception as e:
+        logger.error(f"Transcript upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/transcript/active")
