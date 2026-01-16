@@ -25,6 +25,31 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Markdown content styles for chat responses */
+.markdown-content p {
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content ul {
+  list-style: disc;
+  margin-left: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content ol {
+  list-style: decimal;
+  margin-left: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content li {
+  margin: 0.25rem 0;
+}
+
+.markdown-content strong {
+  font-weight: 600;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

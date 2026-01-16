@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, Sparkles, ThumbsUp, ThumbsDown, FileText } from 'lucide-react';
+import { FilePreviewModal } from './FilePreviewModal';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   citations?: string[];
+  availableDocuments?: string[];
   feedback?: 'up' | 'down';
 }
 
@@ -20,7 +22,71 @@ interface ChatInterfaceProps {
 export function ChatInterface({ projectId, projectName, messages, setMessages }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{ name: string; url: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const renderFormattedContent = (content: string) => {
+    const lines = content.split('\n');
+    const elements: React.ReactNode[] = [];
+    let listItems: string[] = [];
+    let listType: 'ol' | 'ul' | null = null;
+
+    const flushList = () => {
+      if (listItems.length > 0 && listType) {
+        elements.push(
+          listType === 'ol' ? (
+            <ol key={`ol-${elements.length}`} className="list-decimal ml-5 mb-2">
+              {listItems.map((item, idx) => (
+                <li key={idx} className="my-1">{item}</li>
+              ))}
+            </ol>
+          ) : (
+            <ul key={`ul-${elements.length}`} className="list-disc ml-5 mb-2">
+              {listItems.map((item, idx) => (
+                <li key={idx} className="my-1">{item}</li>
+              ))}
+            </ul>
+          )
+        );
+      }
+      listItems = [];
+      listType = null;
+    };
+
+    lines.forEach((line, index) => {
+      const trimmed = line.trim();
+      const orderedMatch = trimmed.match(/^\d+\.\s+(.*)$/);
+      const unorderedMatch = trimmed.match(/^[-*]\s+(.*)$/);
+
+      if (orderedMatch) {
+        if (listType !== 'ol') flushList();
+        listType = 'ol';
+        listItems.push(orderedMatch[1]);
+        return;
+      }
+
+      if (unorderedMatch) {
+        if (listType !== 'ul') flushList();
+        listType = 'ul';
+        listItems.push(unorderedMatch[1]);
+        return;
+      }
+
+      if (trimmed === '') {
+        flushList();
+        elements.push(<div key={`spacer-${index}`} className="h-2" />);
+        return;
+      }
+
+      flushList();
+      elements.push(
+        <p key={`p-${index}`} className="mb-2">{line}</p>
+      );
+    });
+
+    flushList();
+    return elements;
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -50,7 +116,8 @@ export function ChatInterface({ projectId, projectName, messages, setMessages }:
         setMessages(prev => [...prev, { 
             role: 'assistant', 
             content: data.response, 
-            citations: data.citations 
+            citations: data.citations,
+            availableDocuments: data.available_documents
         }]);
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I couldn't process that request." }]);
@@ -131,7 +198,9 @@ export function ChatInterface({ projectId, projectName, messages, setMessages }:
                   <Bot className="w-3 h-3" /> Assistant
                 </div>
               )}
-              <div className="whitespace-pre-wrap">{msg.content}</div>
+              <div className="text-sm">
+                {renderFormattedContent(msg.content)}
+              </div>
 
               {msg.role === 'assistant' && msg.citations && msg.citations.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-slate-200">
@@ -140,7 +209,10 @@ export function ChatInterface({ projectId, projectName, messages, setMessages }:
                     {msg.citations.map((cite, i) => (
                       <button 
                         key={i} 
-                        onClick={() => alert(`Opening document preview for: ${cite}`)}
+                        onClick={() => setPreviewFile({
+                          name: cite,
+                          url: `http://localhost:8000/api/v1/files/${projectId}/${cite}`
+                        })}
                         className="flex items-center gap-1.5 text-xs bg-slate-50 text-blue-600 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-blue-50 hover:border-blue-200 transition-all"
                       >
                         <FileText className="w-3 h-3" />
@@ -148,6 +220,34 @@ export function ChatInterface({ projectId, projectName, messages, setMessages }:
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {msg.role === 'assistant' && (!msg.citations || msg.citations.length === 0) && (
+                <div className="mt-4 pt-3 border-t border-slate-200">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Sources Referenced</p>
+                  {msg.availableDocuments && msg.availableDocuments.length > 0 ? (
+                    <div>
+                      <p className="text-xs text-slate-500 mb-2">No explicit sources were returned. Available documents:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {msg.availableDocuments.map((doc, i) => (
+                          <button
+                            key={`${doc}-${i}`}
+                            onClick={() => setPreviewFile({
+                              name: doc,
+                              url: `http://localhost:8000/api/v1/files/${projectId}/${doc}`
+                            })}
+                            className="flex items-center gap-1.5 text-xs bg-slate-50 text-blue-600 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-blue-50 hover:border-blue-200 transition-all"
+                          >
+                            <FileText className="w-3 h-3" />
+                            <span className="truncate max-w-[150px]">{doc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">No sources provided.</p>
+                  )}
                 </div>
               )}
 
@@ -184,6 +284,13 @@ export function ChatInterface({ projectId, projectName, messages, setMessages }:
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      <FilePreviewModal 
+        isOpen={!!previewFile}
+        onClose={() => setPreviewFile(null)}
+        title={previewFile?.name || ''}
+        fileUrl={previewFile?.url || ''}
+      />
 
       {/* Input Area */}
       <div className="p-4 bg-white border-t border-slate-200">
