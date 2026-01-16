@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { Sidebar } from "../../components/Sidebar";
 import { ChatInterface, type Message } from "../../components/ChatInterface";
 import { DocumentManager } from "../../components/DocumentManager";
 import { ProjectOverview } from "../../components/ProjectOverview";
-import { LayoutDashboard, MessageSquare, Files } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Files, Play } from 'lucide-react';
 
 type Project = {
   id: string;
@@ -122,7 +123,7 @@ export default function DashboardPage() {
               </div>
               
               {/* Tab Navigation */}
-              <div className="flex bg-slate-100 p-1 rounded-lg">
+              <div className="flex bg-slate-100 p-1 rounded-lg items-center gap-1">
                 <button
                   onClick={() => setActiveTab('overview')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'overview' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -137,13 +138,25 @@ export default function DashboardPage() {
                   <MessageSquare className="w-4 h-4" />
                   Assistant
                 </button>
-                <button
-                  onClick={() => setActiveTab('documents')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'documents' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  <Files className="w-4 h-4" />
-                  Documents
-                </button>
+                <div className={`flex items-center rounded-md ${activeTab === 'documents' ? 'bg-white shadow-sm' : ''}`}>
+                  <button
+                    onClick={() => setActiveTab('documents')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'documents' ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    <Files className="w-4 h-4" />
+                    Documents
+                  </button>
+                  {selectedProject && (
+                    <Link
+                      href={`/live/${selectedProject.id}`}
+                      className="ml-1 mr-2 px-4 py-2 text-sm font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex items-center gap-2"
+                      title="Start live transcription"
+                    >
+                      <Play className="w-4 h-4" />
+                      Start
+                    </Link>
+                  )}
+                </div>
               </div>
             </header>
 
