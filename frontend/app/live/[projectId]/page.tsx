@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Mic, ArrowLeft, Circle, Clipboard, Sparkles } from "lucide-react";
@@ -16,6 +16,13 @@ export default function LiveTranscriptionPage() {
   const [shareError, setShareError] = useState("");
   const [sharedStream, setSharedStream] = useState<MediaStream | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+    const transcriptSnippet = useMemo(() => {
+      if (!transcript) return "";
+      const lines = transcript.split("\n").filter((line) => line.trim().length > 0);
+      const snippetLines = lines.slice(-8);
+      const snippet = snippetLines.join("\n");
+      return snippet.length > 1200 ? snippet.slice(-1200) : snippet;
+    }, [transcript]);
   const eventSourceRef = useRef<EventSource | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -121,7 +128,56 @@ export default function LiveTranscriptionPage() {
         try {
           const payload = JSON.parse(event.data);
           const line = `[${payload.timestamp}] ${payload.speaker}: ${payload.text}`;
-          setTranscript((prev) => (prev ? `${prev}\n${line}` : line));
+          setTranscript((prev) => {
+            if (!prev) return line;
+            const lines = prev.split("\n");
+            const normalizedSpeaker = String(payload.speaker).trim().toLowerCase();
+            const incomingText = String(payload.text ?? "").trim();
+            const incomingTime = Date.parse(String(payload.timestamp));
+
+            let lastSpeakerIndex = -1;
+            let lastSpeakerMatch: RegExpMatchArray | null = null;
+
+            for (let i = lines.length - 1; i >= 0; i -= 1) {
+              const match = lines[i].match(/^\[(.+?)\]\s+([^:]+):\s*(.*)$/);
+              if (!match) continue;
+              const [, , speaker] = match;
+              if (speaker.trim().toLowerCase() === normalizedSpeaker) {
+                lastSpeakerIndex = i;
+                lastSpeakerMatch = match;
+                break;
+              }
+            }
+
+            if (lastSpeakerIndex >= 0 && lastSpeakerMatch) {
+              const [, lastTs, , lastTextRaw] = lastSpeakerMatch;
+              const lastText = String(lastTextRaw ?? "").trim();
+              const lastTime = Date.parse(lastTs);
+              const hasOverlap =
+                (incomingText && lastText && (incomingText.startsWith(lastText) || lastText.startsWith(incomingText))) ||
+                incomingText === lastText;
+              const closeInTime =
+                !Number.isNaN(lastTime) && !Number.isNaN(incomingTime)
+                  ? Math.abs(incomingTime - lastTime) <= 15000
+                  : false;
+
+              if (incomingText === lastText) {
+                return prev;
+              }
+
+              if (hasOverlap || closeInTime) {
+                lines[lastSpeakerIndex] = line;
+                return lines.join("\n");
+              }
+            }
+
+            const duplicateLineIndex = lines.slice(-10).findIndex((existing) => existing === line);
+            if (duplicateLineIndex !== -1) {
+              return prev;
+            }
+
+            return `${prev}\n${line}`;
+          });
         } catch (err) {
           // Ignore bad chunks
         }
@@ -219,9 +275,9 @@ export default function LiveTranscriptionPage() {
               </label>
               <textarea
                 value={transcript}
-                onChange={(e) => setTranscript(e.target.value)}
+                readOnly
                 placeholder="Paste or stream live transcript here..."
-                className="flex-1 w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                className="flex-1 w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-default"
               />
               <div className="flex justify-end mt-3">
                 <button
@@ -240,6 +296,7 @@ export default function LiveTranscriptionPage() {
               projectName={projectId || "Live Session"}
               messages={messages}
               setMessages={setMessages}
+              transcriptSnippet={transcriptSnippet}
               containerClassName="flex-1"
             />
             <div className="w-full rounded-2xl p-[2px] bg-[conic-gradient(from_180deg_at_50%_50%,#22d3ee,#a855f7,#f43f5e,#f59e0b,#84cc16,#22d3ee)] shadow-[0_0_25px_rgba(168,85,247,0.45)]">

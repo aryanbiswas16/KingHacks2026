@@ -10,6 +10,7 @@ from typing import List, Dict, Optional, Any
 from pydantic import BaseModel
 
 from ..models.domain import ConsultingContext
+from ..core.config import settings
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
@@ -554,7 +555,7 @@ Use it to help close the deal and deliver consulting value.
             logger.error(f"Failed to reset assistant: {e}")
             raise
 
-    async def chat(self, user_message: str) -> Dict[str, Any]:
+    async def chat(self, user_message: str, rag_enabled: bool = True, transcript_snippet: Optional[str] = None, document_context: Optional[str] = None) -> Dict[str, Any]:
         if not self.assistant or not self.user_thread:
             raise RuntimeError("Assistant not initialized. Call initialize() first.")
         
@@ -564,22 +565,35 @@ Use it to help close the deal and deliver consulting value.
             # Build message with available documents context prepended
             # This ensures the AI knows about current documents even if system prompt is old
             message_to_send = user_message
-            if self.context and self.context.available_documents:
+            if transcript_snippet:
+                trimmed_snippet = transcript_snippet.strip()
+                if trimmed_snippet:
+                    message_to_send = (
+                        f"[Live transcript snippet]\n{trimmed_snippet}\n\n" + message_to_send
+                    )
+            if document_context:
+                trimmed_context = document_context.strip()
+                if trimmed_context:
+                    message_to_send = trimmed_context + "\n\n" + message_to_send
+            if rag_enabled and self.context and self.context.available_documents:
                 docs_list = "\n  • ".join(self.context.available_documents)
                 document_context = f"[Available documents for reference: \n  • {docs_list}]\n\n"
-                message_to_send = document_context + user_message
+                message_to_send = document_context + message_to_send
                 logger.info(f"≡ƒôé Prepended document context: {', '.join(self.context.available_documents)}")
             
             # Send message with memory enabled
+            use_quick_model = not rag_enabled and (settings.QUICK_LLM_PROVIDER or settings.QUICK_MODEL_NAME)
             response = await self.client.add_message(
                 thread_id=self.user_thread.thread_id,
                 content=message_to_send,
                 # Use assistant default or system default (likely OpenAI GPT-4o)
                 # llm_provider="featherless",
                 # model_name="12thD/ko-Llama-3-8B-sft-v0.3",
-                memory="Auto",
+                llm_provider=settings.QUICK_LLM_PROVIDER if use_quick_model else None,
+                model_name=settings.QUICK_MODEL_NAME if use_quick_model else None,
+                memory="Auto" if rag_enabled else "off",
                 stream=False,
-                web_search="Auto" # Enable web search if needed
+                web_search="Auto" if rag_enabled else "off" # Enable web search if needed
             )
             
             logger.info(f"🔍 Raw LLM Response keys: {response.model_dump().keys()}")

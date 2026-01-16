@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Sparkles, ThumbsUp, ThumbsDown, FileText, Info } from 'lucide-react';
+import { Send, Bot, User, Loader2, ThumbsUp, ThumbsDown, FileText, Info } from 'lucide-react';
 import { FilePreviewModal } from './FilePreviewModal';
 import { ResponsibleAINotice } from './ResponsibleAINotice';
 
@@ -19,11 +19,13 @@ interface ChatInterfaceProps {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   containerClassName?: string;
+  transcriptSnippet?: string;
 }
 
-export function ChatInterface({ projectId, projectName, messages, setMessages, containerClassName }: ChatInterfaceProps) {
+export function ChatInterface({ projectId, projectName, messages, setMessages, containerClassName, transcriptSnippet }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [ragEnabled, setRagEnabled] = useState(true);
   const [previewFile, setPreviewFile] = useState<{ name: string; url: string } | null>(null);
   const [showResponsibleAI, setShowResponsibleAI] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -109,7 +111,8 @@ export function ChatInterface({ projectId, projectName, messages, setMessages, c
     setIsLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/chat?project_id=${projectId}&message=${encodeURIComponent(userMsg)}`, {
+      const transcriptParam = transcriptSnippet ? `&transcript_snippet=${encodeURIComponent(transcriptSnippet)}` : '';
+      const response = await fetch(`http://localhost:8000/api/v1/chat?project_id=${projectId}&message=${encodeURIComponent(userMsg)}&rag_enabled=${ragEnabled ? 'true' : 'false'}${transcriptParam}`, {
         method: 'POST',
       });
       
@@ -174,6 +177,19 @@ export function ChatInterface({ projectId, projectName, messages, setMessages, c
         </div>
         <div className="flex items-center gap-2">
           <button
+            type="button"
+            onClick={() => setRagEnabled((prev) => !prev)}
+            className={`flex items-center gap-2 rounded-full border px-2 py-1 text-xs font-medium transition-colors ${
+              ragEnabled
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-slate-100 text-slate-600 border-slate-200'
+            }`}
+            title={ragEnabled ? 'RAG enabled (document retrieval)' : 'Quick mode (no retrieval)'}
+          >
+            <span className={`h-2.5 w-2.5 rounded-full ${ragEnabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+            {ragEnabled ? 'RAG Enabled' : 'Quick Mode'}
+          </button>
+          <button
             onClick={() => setShowResponsibleAI(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors text-xs font-medium"
             title="Responsible AI & Usage Notice"
@@ -181,10 +197,6 @@ export function ChatInterface({ projectId, projectName, messages, setMessages, c
             <Info className="w-3.5 h-3.5" />
             Notice
           </button>
-          <div className="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full border border-blue-100 flex items-center gap-1">
-            <Sparkles className="w-3 h-3" />
-            RAG Enabled
-          </div>
         </div>
       </div>
 

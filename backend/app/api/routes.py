@@ -61,6 +61,37 @@ def get_transcript_queue(project_id: str) -> asyncio.Queue:
         transcript_queues[project_id] = asyncio.Queue()
     return transcript_queues[project_id]
 
+def _select_relevant_documents(message: str, documents: List[str]) -> List[str]:
+    if not documents:
+        return []
+    message_lower = message.lower()
+    matched = [doc for doc in documents if doc.lower() in message_lower]
+    if matched:
+        return matched[:2]
+    if any(keyword in message_lower for keyword in ["document", "documents", "transcript", "file", "txt"]):
+        return documents[:1]
+    return []
+
+def _build_document_context(project_id: str, doc_names: List[str], max_chars: int = 4000) -> str:
+    if not doc_names:
+        return ""
+    snippets: List[str] = []
+    for doc_name in doc_names:
+        file_path = Path(settings.UPLOAD_DIR) / project_id / doc_name
+        if not file_path.exists():
+            continue
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        content = content.strip()
+        if not content:
+            continue
+        if len(content) > max_chars:
+            content = content[:max_chars] + "\n...[truncated]"
+        snippets.append(f"[Document excerpt: {doc_name}]\n{content}")
+    return "\n\n".join(snippets)
+
 class TranscriptChunk(BaseModel):
     project_id: str
     speaker: Optional[str] = None
@@ -349,26 +380,41 @@ async def delete_document(
 
 @router.post("/chat")
 async def chat_endpoint(
-    message: str = Query(...), 
-    project_id: str = Query(...)
+    message: str = Query(...),
+    project_id: str = Query(...),
+    rag_enabled: bool = Query(True),
+    transcript_snippet: Optional[str] = Query(None)
 ):
+    rag_enabled_flag = str(rag_enabled).lower() not in {"false", "0", "off", "no"}
     logger.info(f"Chat request for {project_id}")
     try:
         assistant = await get_assistant(project_id)
 
-        # Refresh context's available_documents from current mappings
-        # This ensures the assistant knows about newly uploaded or removed documents
-        mappings = load_mappings()
-        current_documents = [doc.get("name") for doc in mappings.get(project_id, {}).get("documents", []) if doc.get("name")]
-        if assistant.context:
-            assistant.context.available_documents = current_documents
-            logger.info(f"Updated context documents: {current_documents}")
+        current_documents: List[str] = []
+        document_context = ""
+        if rag_enabled_flag:
+            # Refresh context's available_documents from current mappings
+            # This ensures the assistant knows about newly uploaded or removed documents
+            mappings = load_mappings()
+            current_documents = [doc.get("name") for doc in mappings.get(project_id, {}).get("documents", []) if doc.get("name")]
+            if assistant.context:
+                assistant.context.available_documents = current_documents
+                logger.info(f"Updated context documents: {current_documents}")
 
-        # Refresh thread to pick up newly uploaded documents in Backboard
-        await assistant.refresh_thread()
+            # Build lightweight excerpts for document-specific questions
+            relevant_docs = _select_relevant_documents(message, current_documents)
+            document_context = _build_document_context(project_id, relevant_docs)
+
+            # Refresh thread to pick up newly uploaded documents in Backboard
+            await assistant.refresh_thread()
 
         # response is a dict with 'response' and 'citations'
-        result = await assistant.chat(message)
+        result = await assistant.chat(
+            message,
+            rag_enabled=rag_enabled_flag,
+            transcript_snippet=transcript_snippet,
+            document_context=document_context
+        )
 
         # Use citations directly from Backboard's response - no fallback guessing
         citations = result.get("citations", [])
