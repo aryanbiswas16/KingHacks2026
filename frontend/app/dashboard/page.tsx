@@ -164,7 +164,7 @@ export default function DashboardPage() {
             <main className="flex-1 overflow-y-auto p-8">
               <div className="max-w-7xl mx-auto">
                 {activeTab === 'overview' && (
-                  <div className="animate-in fade-in duration-300">
+                  <div className="animate-in fade-in duration-300 space-y-6">
                     <ProjectOverview projectName={selectedProject.name} />
                   </div>
                 )}

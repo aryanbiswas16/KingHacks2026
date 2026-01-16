@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Sparkles, ThumbsUp, ThumbsDown, FileText } from 'lucide-react';
+import { Send, Bot, User, Loader2, Sparkles, ThumbsUp, ThumbsDown, FileText, Info } from 'lucide-react';
 import { FilePreviewModal } from './FilePreviewModal';
+import { ResponsibleAINotice } from './ResponsibleAINotice';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -24,6 +25,7 @@ export function ChatInterface({ projectId, projectName, messages, setMessages, c
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [previewFile, setPreviewFile] = useState<{ name: string; url: string } | null>(null);
+  const [showResponsibleAI, setShowResponsibleAI] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const renderFormattedContent = (content: string) => {
@@ -170,9 +172,19 @@ export function ChatInterface({ projectId, projectName, messages, setMessages, c
             <p className="text-xs text-slate-500">Context: {projectName}</p>
           </div>
         </div>
-        <div className="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full border border-blue-100 flex items-center gap-1">
-          <Sparkles className="w-3 h-3" />
-          RAG Enabled
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowResponsibleAI(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors text-xs font-medium"
+            title="Responsible AI & Usage Notice"
+          >
+            <Info className="w-3.5 h-3.5" />
+            Notice
+          </button>
+          <div className="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full border border-blue-100 flex items-center gap-1">
+            <Sparkles className="w-3 h-3" />
+            RAG Enabled
+          </div>
         </div>
       </div>
 
@@ -227,7 +239,8 @@ export function ChatInterface({ projectId, projectName, messages, setMessages, c
               )}
 
               {msg.role === 'assistant' && (
-                <div className="mt-3 flex justify-end gap-1">
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <div className="flex justify-end gap-1">
                    <button 
                     onClick={() => handleFeedback(idx, 'up')}
                     className={`p-1.5 rounded hover:bg-slate-100 transition-colors ${msg.feedback === 'up' ? 'text-green-600' : 'text-slate-400'}`}
@@ -242,6 +255,7 @@ export function ChatInterface({ projectId, projectName, messages, setMessages, c
                    >
                      <ThumbsDown className="w-3.5 h-3.5" />
                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -287,6 +301,12 @@ export function ChatInterface({ projectId, projectName, messages, setMessages, c
           </button>
         </form>
       </div>
+
+      {/* Responsible AI Notice Modal */}
+      <ResponsibleAINotice 
+        isOpen={showResponsibleAI}
+        onClose={() => setShowResponsibleAI(false)}
+      />
     </div>
   );
 }

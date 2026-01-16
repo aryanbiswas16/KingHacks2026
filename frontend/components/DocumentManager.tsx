@@ -123,6 +123,15 @@ export function DocumentManager({ projectId, documents, onUploadComplete }: Docu
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      {/* Privacy Notice Banner */}
+      <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
+        <span className="text-lg">🔒</span>
+        <div className="flex-1">
+          <p className="text-xs font-semibold text-blue-900 uppercase tracking-wide">Privacy Protection Active</p>
+          <p className="text-xs text-blue-700 mt-1">Sensitive information in documents is handled according to enterprise security and privacy standards. All data is processed securely.</p>
+        </div>
+      </div>
+
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
           <FileText className="w-5 h-5 text-blue-600" />
