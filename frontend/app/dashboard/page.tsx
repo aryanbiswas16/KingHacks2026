@@ -43,7 +43,7 @@ export default function DashboardPage() {
 
   const [selectedClient, setSelectedClient] = useState<Client | null>(clients[0]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(clients[0].projects[0]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'chat' | 'documents'>('chat');
+  const [activeTab, setActiveTab] = useState<'overview' | 'chat' | 'documents'>('overview');
   const [projectChats, setProjectChats] = useState<Record<string, Message[]>>({});
   
   // Minimal document state mock
@@ -165,7 +165,7 @@ export default function DashboardPage() {
               <div className="max-w-7xl mx-auto">
                 {activeTab === 'overview' && (
                   <div className="animate-in fade-in duration-300 space-y-6">
-                    <ProjectOverview projectName={selectedProject.name} />
+                    <ProjectOverview projectName={selectedProject.name} projectId={selectedProject.id} />
                   </div>
                 )}
                 
