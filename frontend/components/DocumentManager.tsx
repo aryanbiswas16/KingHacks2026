@@ -9,11 +9,17 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { ConfirmDialog } from './ConfirmDialog';
+import { formatDate } from '../lib/dateUtils';
 
 interface Document {
   name: string;
   status: string;
   id?: string;
+  file_type?: string;
+  file_size?: number;
+  size_formatted?: string;
+  is_transcript?: boolean;
+  uploaded_at?: string;
 }
 
 interface DocumentManagerProps {
@@ -159,56 +165,156 @@ export function DocumentManager({ projectId, documents, onUploadComplete }: Docu
         </div>
       </div>
 
-      <div className="space-y-3">
-        {documents.length === 0 ? (
-          <div className="text-center py-12 bg-slate-50 rounded-lg border border-dashed border-slate-300">
-            <p className="text-slate-500 text-sm">No documents uploaded yet.</p>
-            <p className="text-slate-400 text-xs mt-1">Upload strategy memos, transcripts, or sales data.</p>
-          </div>
-        ) : (
-          <div className="grid gap-3">
-             {documents.map((doc, idx) => (
-              <div 
-                key={idx} 
-                className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg hover:border-blue-200 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="bg-white p-2 rounded border border-slate-200">
-                    <FileText className="w-5 h-5 text-slate-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-700">{doc.name}</p>
-                    <p className="text-xs text-slate-500 uppercase">{doc.status || 'Processed'}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                   {doc.status === 'failed' ? (
-                       <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
-                           <AlertCircle className="w-3 h-3" /> Failed
-                       </span>
-                   ) : (
-                       <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                           <CheckCircle className="w-3 h-3" /> Indexed
-                       </span>
-                   )}
-                   <button
-                     onClick={() => handleDeleteClick(doc.id || '', doc.name)}
-                     disabled={deletingId === doc.id}
-                     className="ml-2 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-                     title="Delete document"
-                   >
-                     {deletingId === doc.id ? (
-                       <Loader2 className="w-4 h-4 animate-spin" />
-                     ) : (
-                       <Trash2 className="w-4 h-4" />
-                     )}
-                   </button>
-                </div>
+      {documents.length === 0 ? (
+        <div className="text-center py-12 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+          <p className="text-slate-500 text-sm">No documents uploaded yet.</p>
+          <p className="text-slate-400 text-xs mt-1">Upload strategy memos, transcripts, or sales data.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Documents Section */}
+          {documents.filter(d => !d.is_transcript).length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-slate-700 mb-3 px-1">
+                Documents ({documents.filter(d => !d.is_transcript).length})
+              </h4>
+              <div className="space-y-2">
+                {documents
+                  .filter(d => !d.is_transcript)
+                  .sort((a, b) => {
+                    if (a.uploaded_at && b.uploaded_at) {
+                      return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
+                    }
+                    return 0;
+                  })
+                  .map((doc, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg hover:border-blue-200 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="bg-gradient-to-br from-blue-100 to-blue-50 p-2 rounded border border-blue-200 min-w-fit">
+                          <span className="text-xs font-bold text-blue-600">
+                            {doc.file_type || 'FILE'}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-700 truncate">{doc.name}</p>
+                          <div className="flex gap-3 mt-1">
+                            {doc.uploaded_at && (
+                              <p className="text-xs text-slate-500">
+                                {formatDate(doc.uploaded_at)}
+                              </p>
+                            )}
+                            {doc.size_formatted && (
+                              <p className="text-xs text-slate-500">
+                                {doc.size_formatted}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 ml-2">
+                        {doc.status === 'failed' ? (
+                          <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
+                            <AlertCircle className="w-3 h-3" /> Failed
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                            <CheckCircle className="w-3 h-3" /> Indexed
+                          </span>
+                        )}
+                        <button
+                          onClick={() => handleDeleteClick(doc.id || '', doc.name)}
+                          disabled={deletingId === doc.id}
+                          className="ml-2 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                          title="Delete document"
+                        >
+                          {deletingId === doc.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+
+          {/* Meeting Transcripts Section */}
+          {documents.filter(d => d.is_transcript).length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-slate-700 mb-3 px-1">
+                Meeting Transcripts ({documents.filter(d => d.is_transcript).length})
+              </h4>
+              <div className="space-y-2">
+                {documents
+                  .filter(d => d.is_transcript)
+                  .sort((a, b) => {
+                    if (a.uploaded_at && b.uploaded_at) {
+                      return new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime();
+                    }
+                    return 0;
+                  })
+                  .map((doc, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg hover:border-blue-200 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="bg-gradient-to-br from-purple-100 to-purple-50 p-2 rounded border border-purple-200 min-w-fit">
+                          <span className="text-xs font-bold text-purple-600">
+                            {doc.file_type || 'FILE'}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-700 truncate">{doc.name}</p>
+                          <div className="flex gap-3 mt-1">
+                            {doc.uploaded_at && (
+                              <p className="text-xs text-slate-500">
+                                {formatDate(doc.uploaded_at)}
+                              </p>
+                            )}
+                            {doc.size_formatted && (
+                              <p className="text-xs text-slate-500">
+                                {doc.size_formatted}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 ml-2">
+                        {doc.status === 'failed' ? (
+                          <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
+                            <AlertCircle className="w-3 h-3" /> Failed
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                            <CheckCircle className="w-3 h-3" /> Indexed
+                          </span>
+                        )}
+                        <button
+                          onClick={() => handleDeleteClick(doc.id || '', doc.name)}
+                          disabled={deletingId === doc.id}
+                          className="ml-2 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                          title="Delete document"
+                        >
+                          {deletingId === doc.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Confirmation Dialog */}
       <ConfirmDialog

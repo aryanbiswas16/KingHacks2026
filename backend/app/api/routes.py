@@ -3,6 +3,7 @@ import os
 import json
 import logging
 from pathlib import Path
+from datetime import datetime
 from typing import List, Dict, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Query, Depends
@@ -12,6 +13,37 @@ from ..core.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# --- Helper Functions ---
+
+def get_file_type(filename: str) -> str:
+    """Detect file type from filename"""
+    ext = Path(filename).suffix.lower()
+    if ext == '.pdf':
+        return 'PDF'
+    elif ext in ['.txt', '.text']:
+        return 'Text'
+    elif ext in ['.doc', '.docx']:
+        return 'Document'
+    elif ext in ['.xls', '.xlsx', '.csv']:
+        return 'Spreadsheet'
+    elif ext in ['.ppt', '.pptx']:
+        return 'Presentation'
+    else:
+        return 'File'
+
+def is_transcript(filename: str) -> bool:
+    """Check if filename indicates a meeting transcript"""
+    name_lower = filename.lower()
+    return any(keyword in name_lower for keyword in ['transcript', 'call', 'meeting', 'recording'])
+
+def format_file_size(bytes_size: int) -> str:
+    """Format file size in human-readable format"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if bytes_size < 1024.0:
+            return f"{bytes_size:.1f} {unit}"
+        bytes_size /= 1024.0
+    return f"{bytes_size:.1f} TB"
 
 # --- Persistence Layer (Simple JSON storage) ---
 # In a real app, this would be a separate Repository class using a DB.
@@ -193,13 +225,37 @@ async def upload_files(
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     try:
+        file_metadata = {}  # Store file size, type, and transcript flag
+        
         for file in files:
             temp_path = upload_dir / file.filename
             with temp_path.open("wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
+            
+            # Capture metadata
+            file_size = temp_path.stat().st_size
+            file_type = get_file_type(file.filename)
+            is_trans = is_transcript(file.filename)
+            
             uploaded_paths.append(str(temp_path))
+            file_metadata[file.filename] = {
+                "size": file_size,
+                "type": file_type,
+                "is_transcript": is_trans
+            }
 
         results = await assistant.upload_project_documents(uploaded_paths)
+        
+        # Enrich results with metadata
+        for result in results:
+            if result["name"] in file_metadata:
+                meta = file_metadata[result["name"]]
+                result["file_type"] = meta["type"]
+                result["file_size"] = meta["size"]
+                result["size_formatted"] = format_file_size(meta["size"])
+                result["is_transcript"] = meta["is_transcript"]
+                result["uploaded_at"] = datetime.now().isoformat()
+        
         add_documents_to_mapping(project_id, results)
         
         return {"status": "success", "results": results, "project_id": project_id}

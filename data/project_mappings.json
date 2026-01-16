@@ -10,8 +10,13 @@
     "documents": [
       {
         "name": "ACME_Discovery_Call_Teams_Transcript.txt",
-        "id": "bdc3b092-d08f-4dc5-a21a-62c5c6db76fd",
-        "status": "indexed"
+        "id": "91e0a514-b0a9-42c4-8c91-1a60fa62f9d2",
+        "status": "indexed",
+        "file_type": "Text",
+        "file_size": 2348,
+        "size_formatted": "2.3 KB",
+        "is_transcript": true,
+        "uploaded_at": "2026-01-15T19:37:12.075312"
       }
     ]
   },
@@ -21,8 +26,8 @@
     "documents": []
   },
   "proj_global_pay": {
-    "assistant_id": "d9e90418-33eb-4e15-9f9c-3dedfccbcbe4",
-    "thread_id": "77e07e6f-e75e-453a-889c-e5ffddee62be",
+    "assistant_id": "ad88c94f-f724-4fb9-bdc9-3670e2813e1e",
+    "thread_id": "968a518d-1928-41a9-954a-905d2f25ffad",
     "documents": []
   }
 }
