@@ -28,6 +28,17 @@
   "proj_global_pay": {
     "assistant_id": "ed89af67-b535-4458-9ab3-4f0e86634d97",
     "thread_id": "4d49eefa-f118-4580-a802-6518c2bc9b1a",
-    "documents": []
+    "documents": [
+      {
+        "name": "zoom_meeting_2026-01-16_08-20-34.txt",
+        "id": "b4a7a632-8043-4d26-abbb-fd2778b04ee9",
+        "status": "indexed",
+        "file_type": "Text",
+        "file_size": 196,
+        "size_formatted": "196.0 B",
+        "is_transcript": true,
+        "uploaded_at": "2026-01-16T03:20:38.812533"
+      }
+    ]
   }
 }

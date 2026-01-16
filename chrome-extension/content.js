@@ -4,6 +4,8 @@ let indicatorEl = null;
 let activeProjectId = null;
 let activeMeetingUrl = null;
 let activePollTimer = null;
+let consentGateEl = null;
+let consentGranted = false;
 
 const CAPTION_CONTAINER_SELECTOR = '[aria-label="Captions"], .vNKgIf.UDinHf, .vNKgIf[role="region"]'; // Captions container
 const CAPTION_ROW_SELECTOR = ".nMcdL"; // Individual caption row
@@ -11,6 +13,82 @@ const SPEAKER_SELECTOR = ".NWpY1d";
 const TEXT_SELECTOR = ".ygicle";
 
 const seenEntries = new Set();
+
+const ensureConsentGate = () => {
+  if (consentGateEl) return;
+  consentGateEl = document.createElement("div");
+  consentGateEl.style.position = "fixed";
+  consentGateEl.style.bottom = "16px";
+  consentGateEl.style.right = "16px";
+  consentGateEl.style.zIndex = "999999";
+  consentGateEl.style.background = "rgba(15, 23, 42, 0.95)";
+  consentGateEl.style.color = "#e2e8f0";
+  consentGateEl.style.padding = "12px 14px";
+  consentGateEl.style.borderRadius = "12px";
+  consentGateEl.style.boxShadow = "0 12px 30px rgba(0,0,0,0.35)";
+  consentGateEl.style.fontSize = "12px";
+  consentGateEl.style.fontFamily = "system-ui, -apple-system, Segoe UI, sans-serif";
+  consentGateEl.style.maxWidth = "260px";
+  consentGateEl.style.display = "flex";
+  consentGateEl.style.flexDirection = "column";
+  consentGateEl.style.gap = "8px";
+
+  const title = document.createElement("div");
+  title.style.fontWeight = "600";
+  title.textContent = "Consent required";
+
+  const note = document.createElement("div");
+  note.textContent = "Confirm everyone on this call consents to live transcription.";
+  note.style.color = "#cbd5f5";
+
+  const actionRow = document.createElement("div");
+  actionRow.style.display = "flex";
+  actionRow.style.gap = "8px";
+  actionRow.style.justifyContent = "flex-end";
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.textContent = "I have consent";
+  confirmBtn.style.background = "#10b981";
+  confirmBtn.style.color = "#ffffff";
+  confirmBtn.style.border = "none";
+  confirmBtn.style.borderRadius = "999px";
+  confirmBtn.style.padding = "6px 10px";
+  confirmBtn.style.fontSize = "11px";
+  confirmBtn.style.cursor = "pointer";
+  confirmBtn.addEventListener("click", async () => {
+    consentGranted = true;
+    try {
+      await chrome.storage.local.set({ consentGranted: true });
+    } catch (err) {
+      // ignore storage errors
+    }
+    consentGateEl.style.display = "none";
+  });
+
+  actionRow.appendChild(confirmBtn);
+  consentGateEl.appendChild(title);
+  consentGateEl.appendChild(note);
+  consentGateEl.appendChild(actionRow);
+  document.body.appendChild(consentGateEl);
+};
+
+const ensureConsent = async () => {
+  if (consentGranted) return true;
+  try {
+    const stored = await chrome.storage.local.get("consentGranted");
+    if (stored?.consentGranted) {
+      consentGranted = true;
+      return true;
+    }
+  } catch (err) {
+    // ignore storage errors
+  }
+
+  ensureConsentGate();
+  consentGateEl.style.display = "flex";
+  setIndicatorState("Consent required");
+  return false;
+};
 
 const ensureIndicator = () => {
   if (indicatorEl) return;
@@ -174,6 +252,10 @@ const startCapture = () => {
     setIndicatorState("Waiting for Start");
     return;
   }
+  if (!consentGranted) {
+    ensureConsent();
+    return;
+  }
   isCapturing = true;
 
   const container = document.querySelector(CAPTION_CONTAINER_SELECTOR);
@@ -207,6 +289,8 @@ const autoStartWhenCaptionsReady = () => {
       setIndicatorState("Waiting for Start");
       return;
     }
+
+    ensureConsent();
 
     if (document.querySelector(CAPTION_CONTAINER_SELECTOR)) {
       startCapture();
