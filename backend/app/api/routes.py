@@ -117,6 +117,34 @@ def _build_document_context(project_id: str, doc_names: List[str], max_chars: in
         snippets.append(f"[Document excerpt: {doc_name}]\n{content}")
     return "\n\n".join(snippets)
 
+def _parse_suggestion_sections(text: str) -> Dict[str, List[str]]:
+    sections = {"notes": [], "suggestions": []}
+    if not text:
+        return sections
+
+    current: Optional[str] = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        header_match = re.match(r"^(notes|suggestions)\s*:\s*$", stripped, re.IGNORECASE)
+        if header_match:
+            current = header_match.group(1).lower()
+            continue
+
+        item = re.sub(r"^[-*\d.\s]+", "", stripped).strip()
+        if not item:
+            continue
+
+        if current in sections:
+            sections[current].append(item)
+
+    if not sections["notes"] and not sections["suggestions"]:
+        fallback_items = [re.sub(r"^[-*\d.\s]+", "", line).strip() for line in text.splitlines()]
+        sections["suggestions"] = [item for item in fallback_items if item]
+
+    return sections
+
 class TranscriptChunk(BaseModel):
     project_id: str
     speaker: Optional[str] = None
@@ -133,6 +161,15 @@ class TranscriptUploadRequest(BaseModel):
     meeting_name: Optional[str] = None
     meeting_datetime: Optional[str] = None
     transcript: str
+
+class SuggestionMessage(BaseModel):
+    role: str
+    content: str
+
+class SuggestionRequest(BaseModel):
+    project_id: str
+    messages: List[SuggestionMessage] = []
+    transcript_snippet: Optional[str] = None
 
 # --- Persistence Layer (Simple JSON storage) ---
 # In a real app, this would be a separate Repository class using a DB.
@@ -459,6 +496,63 @@ async def chat_endpoint(
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/ai-suggestion")
+async def ai_suggestion_endpoint(payload: SuggestionRequest):
+    if not payload.project_id:
+        raise HTTPException(status_code=400, detail="Project ID is required")
+
+    assistant = await get_assistant(payload.project_id)
+
+    messages = payload.messages or []
+    trimmed_messages = messages[-12:]
+    context_lines: List[str] = []
+    for msg in trimmed_messages:
+        content = (msg.content or "").strip()
+        if not content:
+            continue
+        if len(content) > 600:
+            content = content[:600] + "..."
+        context_lines.append(f"{msg.role.capitalize()}: {content}")
+
+    chat_context = "\n".join(context_lines).strip()
+    if len(chat_context) > 4000:
+        chat_context = chat_context[-4000:]
+
+    prompt = (
+        "You are Beacon Sales AI. Provide two sections: \n"
+        "Notes: 1-3 short bullets that summarize the current conversation state and transcript.\n"
+        "Suggestions: 2-3 short bullets with next-step ideas or talking points.\n"
+        "Keep bullets concise and referenceable. Output only the two labeled sections.\n\n"
+        f"Chat context:\n{chat_context or 'No prior chat context.'}"
+    )
+
+    result = await assistant.chat(
+        prompt,
+        rag_enabled=False,
+        transcript_snippet=payload.transcript_snippet,
+        document_context=None
+    )
+
+    response_text = result.get("response", "")
+    sections = _parse_suggestion_sections(response_text)
+    notes = sections["notes"]
+    suggestions = sections["suggestions"]
+    total_items = len(notes) + len(suggestions)
+    if total_items > 6:
+        trimmed: List[str] = []
+        trimmed.extend(suggestions)
+        remaining = 6 - len(trimmed)
+        if remaining > 0:
+            trimmed.extend(notes[:remaining])
+        suggestions = trimmed[: min(len(suggestions), 6)]
+        notes = trimmed[len(suggestions):]
+
+    return {
+        "notes": notes,
+        "suggestions": suggestions,
+        "project_id": payload.project_id
+    }
 
 class FeedbackRequest(BaseModel):
     message_content: str

@@ -28,37 +28,6 @@
   "proj_global_pay": {
     "assistant_id": "ed89af67-b535-4458-9ab3-4f0e86634d97",
     "thread_id": "4d49eefa-f118-4580-a802-6518c2bc9b1a",
-    "documents": [
-      {
-        "name": "ACME_Discovery_Call_Teams_Transcript.txt",
-        "id": "9e641db7-4a72-4a55-a776-e1defadf2a58",
-        "status": "indexed",
-        "file_type": "Text",
-        "file_size": 2348,
-        "size_formatted": "2.3 KB",
-        "is_transcript": true,
-        "uploaded_at": "2026-01-15T23:13:19.471203"
-      },
-      {
-        "name": "Client_Meeting_2026-01-16_06-55-47.txt",
-        "id": "79a5cd62-4193-4fea-b568-6b5a0127008f",
-        "status": "indexed",
-        "file_type": "Text",
-        "file_size": 20717,
-        "size_formatted": "20.2 KB",
-        "is_transcript": true,
-        "uploaded_at": "2026-01-16T01:55:54.373615"
-      },
-      {
-        "name": "Client_Meeting_2026-01-16_07-08-07.txt",
-        "id": "3d5c7ae4-6cde-4afb-b4b3-25968c5dd824",
-        "status": "indexed",
-        "file_type": "Text",
-        "file_size": 153,
-        "size_formatted": "153.0 B",
-        "is_transcript": true,
-        "uploaded_at": "2026-01-16T02:08:10.960347"
-      }
-    ]
+    "documents": []
   }
 }

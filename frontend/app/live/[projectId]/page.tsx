@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Mic, ArrowLeft, Circle, Clipboard, Sparkles } from "lucide-react";
+import { Mic, ArrowLeft, Clipboard, Sparkles, X } from "lucide-react";
 import { ChatInterface, type Message } from "../../../components/ChatInterface";
 
 export default function LiveTranscriptionPage() {
@@ -16,18 +16,32 @@ export default function LiveTranscriptionPage() {
   const [transcript, setTranscript] = useState("");
   const [shareError, setShareError] = useState("");
   const [sharedStream, setSharedStream] = useState<MediaStream | null>(null);
-  const [autoSave, setAutoSave] = useState(false);
+  const [autoSave, setAutoSave] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
-    const transcriptSnippet = useMemo(() => {
-      if (!transcript) return "";
-      const lines = transcript.split("\n").filter((line) => line.trim().length > 0);
-      const snippetLines = lines.slice(-8);
-      const snippet = snippetLines.join("\n");
-      return snippet.length > 1200 ? snippet.slice(-1200) : snippet;
-    }, [transcript]);
+  const [aiNotes, setAiNotes] = useState<string[]>([]);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [aiNotesError, setAiNotesError] = useState("");
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const transcriptSnippet = useMemo(() => {
+    if (!transcript) return "";
+    const lines = transcript.split("\n").filter((line) => line.trim().length > 0);
+    const snippetLines = lines.slice(-8);
+    const snippet = snippetLines.join("\n");
+    return snippet.length > 1200 ? snippet.slice(-1200) : snippet;
+  }, [transcript]);
+  const aiNotesList = aiNotes;
+  const aiSuggestionsList = aiSuggestions;
+  const aiCombinedList = useMemo(
+    () =>
+      [
+        ...aiSuggestionsList.map((item) => ({ type: "Suggestion", text: item })),
+        ...aiNotesList.map((item) => ({ type: "Note", text: item }))
+      ].slice(0, 6),
+    [aiSuggestionsList, aiNotesList]
+  );
   const eventSourceRef = useRef<EventSource | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -245,6 +259,37 @@ export default function LiveTranscriptionPage() {
     }
   };
 
+  const handleAiSuggestion = async () => {
+    if (!projectId || isSuggesting) return;
+    setIsSuggesting(true);
+    setAiNotesError("");
+    try {
+      const response = await fetch("http://localhost:8000/api/v1/ai-suggestion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: projectId,
+          transcript_snippet: transcriptSnippet,
+          messages: messages.map((msg) => ({ role: msg.role, content: msg.content })).slice(-12)
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.detail || "Failed to generate suggestions.");
+      }
+
+      const notes = Array.isArray(data?.notes) ? data.notes : [];
+      const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
+      setAiNotes(notes);
+      setAiSuggestions(suggestions);
+    } catch (error) {
+      setAiNotesError(error instanceof Error ? error.message : "Failed to generate suggestions.");
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
   useEffect(() => {
     return () => {
       eventSourceRef.current?.close();
@@ -275,7 +320,7 @@ export default function LiveTranscriptionPage() {
 
       <main className="flex-1 overflow-hidden p-4 h-[calc(100vh-72px)]">
         <div className="h-full grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4">
-          <div className="flex flex-col gap-4 h-full">
+          <div className="flex flex-col gap-4 h-full min-h-0">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
               <div className="relative aspect-video w-full max-w-none rounded-lg border border-slate-200 bg-slate-900/90 overflow-hidden">
                 <video
@@ -291,28 +336,18 @@ export default function LiveTranscriptionPage() {
                   </div>
                 )}
               </div>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                  <Mic className="w-5 h-5 text-emerald-600" />
-                  Live Transcription
-                </h2>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <Circle className={`w-2 h-2 ${isLive ? "text-emerald-500" : "text-slate-300"}`} />
-                    {isLive ? "Live" : "Idle"}
-                  </div>
-                  <button
-                    onClick={handleToggle}
-                    disabled={isStarting || !projectId}
-                    className={`px-5 py-2.5 rounded-xl text-base font-semibold text-white transition-colors shadow-sm ${
-                      isLive
-                        ? "bg-red-600 hover:bg-red-700"
-                        : "bg-emerald-600 hover:bg-emerald-700"
-                    }`}
-                  >
-                    {isLive ? "Stop" : isStarting ? "Starting..." : "Start"}
-                  </button>
-                </div>
+              <div className="mt-3 flex flex-col gap-3">
+                <button
+                  onClick={handleToggle}
+                  disabled={isStarting || !projectId}
+                  className={`w-full px-5 py-2.5 rounded-xl text-base font-semibold text-white transition-colors shadow-sm ${
+                    isLive
+                      ? "bg-red-600 hover:bg-red-700"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                  }`}
+                >
+                  {isLive ? "Stop" : isStarting ? "Starting..." : "Start"}
+                </button>
               </div>
               {shareError && (
                 <p className="text-xs text-red-600 mt-2">{shareError}</p>
@@ -320,32 +355,9 @@ export default function LiveTranscriptionPage() {
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col min-h-[200px] flex-1">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                Live Transcript
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    Meeting Name
-                  </label>
-                  <input
-                    value={meetingName}
-                    onChange={(e) => setMeetingName(e.target.value)}
-                    placeholder="Customer discovery call"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                    Meeting Link (Optional)
-                  </label>
-                  <input
-                    value={meetingUrl}
-                    onChange={(e) => setMeetingUrl(e.target.value)}
-                    placeholder="https://zoom.us/j/..."
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
+              <div className="flex items-center gap-2 mb-3">
+                <Mic className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-sm font-semibold text-slate-900">Transcript</h3>
               </div>
               <textarea
                 value={transcript}
@@ -379,22 +391,57 @@ export default function LiveTranscriptionPage() {
             </div>
           </div>
 
-          <div className="h-full flex flex-col gap-3">
+          <div className="h-full flex flex-col gap-3 min-h-0">
             <ChatInterface
               projectId={projectId || ""}
               projectName={projectId || "Live Session"}
               messages={messages}
               setMessages={setMessages}
               transcriptSnippet={transcriptSnippet}
-              containerClassName="flex-1"
+              containerClassName="flex-1 min-h-0"
             />
+            {(aiNotesError || aiCombinedList.length > 0) && (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    AI Suggestions
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiNotes([]);
+                      setAiSuggestions([]);
+                      setAiNotesError("");
+                    }}
+                    className="text-slate-400 hover:text-slate-600 transition-colors"
+                    aria-label="Close AI notes"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {aiNotesError ? (
+                  <p className="text-sm text-red-600">{aiNotesError}</p>
+                ) : (
+                  <ul className="space-y-2 text-sm text-slate-700">
+                    {aiCombinedList.map((item, index) => (
+                      <li key={`ai-${index}`} className="flex gap-2">
+                        <span className="text-emerald-600">•</span>
+                        <span>{item.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             <div className="w-full rounded-2xl p-[2px] bg-[conic-gradient(from_180deg_at_50%_50%,#22d3ee,#a855f7,#f43f5e,#f59e0b,#84cc16,#22d3ee)] shadow-[0_0_25px_rgba(168,85,247,0.45)]">
               <button
+                onClick={handleAiSuggestion}
+                disabled={isSuggesting || !projectId}
                 className="w-full h-12 rounded-[14px] bg-slate-950 text-white font-semibold shadow-[0_8px_20px_rgba(15,23,42,0.45)] hover:bg-slate-900 transition-colors flex items-center justify-center gap-2"
                 type="button"
               >
                 <Sparkles className="w-4 h-4" />
-                AI Suggestion
+                {isSuggesting ? "Generating..." : "AI Suggestion"}
               </button>
             </div>
           </div>
