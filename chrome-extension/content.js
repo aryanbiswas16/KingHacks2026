@@ -6,6 +6,7 @@ let activeMeetingUrl = null;
 let activePollTimer = null;
 let consentGateEl = null;
 let consentGranted = false;
+let pendingStart = false;
 
 const CAPTION_CONTAINER_SELECTOR = '[aria-label="Captions"], .vNKgIf.UDinHf, .vNKgIf[role="region"]'; // Captions container
 const CAPTION_ROW_SELECTOR = ".nMcdL"; // Individual caption row
@@ -57,12 +58,11 @@ const ensureConsentGate = () => {
   confirmBtn.style.cursor = "pointer";
   confirmBtn.addEventListener("click", async () => {
     consentGranted = true;
-    try {
-      await chrome.storage.local.set({ consentGranted: true });
-    } catch (err) {
-      // ignore storage errors
-    }
     consentGateEl.style.display = "none";
+    if (pendingStart) {
+      pendingStart = false;
+      startCapture();
+    }
   });
 
   actionRow.appendChild(confirmBtn);
@@ -74,15 +74,6 @@ const ensureConsentGate = () => {
 
 const ensureConsent = async () => {
   if (consentGranted) return true;
-  try {
-    const stored = await chrome.storage.local.get("consentGranted");
-    if (stored?.consentGranted) {
-      consentGranted = true;
-      return true;
-    }
-  } catch (err) {
-    // ignore storage errors
-  }
 
   ensureConsentGate();
   consentGateEl.style.display = "flex";
@@ -253,6 +244,7 @@ const startCapture = () => {
     return;
   }
   if (!consentGranted) {
+    pendingStart = true;
     ensureConsent();
     return;
   }
@@ -276,6 +268,8 @@ const startCapture = () => {
 
 const stopCapture = () => {
   isCapturing = false;
+  consentGranted = false;
+  pendingStart = false;
   if (observer) {
     observer.disconnect();
     observer = null;
@@ -317,6 +311,8 @@ startActivePolling();
 autoStartWhenCaptionsReady();
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "START_CAPTURE") {
+    consentGranted = false;
+    pendingStart = true;
     startCapture();
     sendResponse({ ok: true });
   }

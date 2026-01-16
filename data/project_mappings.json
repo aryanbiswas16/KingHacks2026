@@ -7,37 +7,58 @@
   "proj_start_scale": {
     "assistant_id": "b9afed29-1e11-4f86-bb7a-2da5b9068beb",
     "thread_id": "9fbd4d5d-953d-41cf-9c7d-c43414762a7d",
-    "documents": []
-  },
-  "proj_global_cloud": {
-    "assistant_id": "d13cf29e-416b-49d8-a442-e398457bbe14",
-    "thread_id": "5373bdb3-653d-4be4-a1b1-ded7b0931555",
     "documents": [
       {
-        "name": "ACME_Discovery_Call_Teams_Transcript.txt",
-        "id": "ef8f0b4a-53c2-4eca-8ed9-202c26f0b2cb",
+        "name": "Business Strategy.pdf",
+        "id": "73f7b932-66f4-41e7-980c-31b49b990320",
+        "status": "indexed",
+        "file_type": "PDF",
+        "file_size": 70360,
+        "size_formatted": "68.7 KB",
+        "is_transcript": false,
+        "uploaded_at": "2026-01-16T04:24:55.753032"
+      },
+      {
+        "name": "ACME_Discovery_Call_Teams_Transcript (1).txt",
+        "id": "33e92b36-c53f-46eb-b04e-f5e30ace3255",
         "status": "indexed",
         "file_type": "Text",
         "file_size": 2348,
         "size_formatted": "2.3 KB",
         "is_transcript": true,
-        "uploaded_at": "2026-01-15T21:34:47.932043"
+        "uploaded_at": "2026-01-16T04:25:06.350922"
       }
     ]
   },
   "proj_global_pay": {
-    "assistant_id": "ed89af67-b535-4458-9ab3-4f0e86634d97",
-    "thread_id": "4d49eefa-f118-4580-a802-6518c2bc9b1a",
+    "assistant_id": "903ad43a-faab-4bbe-8eb4-12b249b9b291",
+    "thread_id": "187b7892-6b0f-483a-bd0a-1ade8f1c6a47",
     "documents": [
       {
-        "name": "zoom_meeting_2026-01-16_08-20-34.txt",
-        "id": "b4a7a632-8043-4d26-abbb-fd2778b04ee9",
+        "name": "zoom_meeting_2026-01-16_10-07-16.txt",
+        "id": "c484a053-8e47-41be-a59c-a5921d8a71b6",
         "status": "indexed",
         "file_type": "Text",
-        "file_size": 196,
-        "size_formatted": "196.0 B",
+        "file_size": 1538,
+        "size_formatted": "1.5 KB",
         "is_transcript": true,
-        "uploaded_at": "2026-01-16T03:20:38.812533"
+        "uploaded_at": "2026-01-16T05:07:20.998980"
+      }
+    ]
+  },
+  "proj_global_cloud": {
+    "assistant_id": "be5eb351-4908-46d0-8a3f-f4b301addb81",
+    "thread_id": "35b576b8-f338-4492-90ba-2c5f7b3d95b2",
+    "documents": [
+      {
+        "name": "zoom_meeting_2026-01-16_10-15-22.txt",
+        "id": "ac750a77-20e9-4165-aa24-ffbce2cf5300",
+        "status": "indexed",
+        "file_type": "Text",
+        "file_size": 360,
+        "size_formatted": "360.0 B",
+        "is_transcript": true,
+        "uploaded_at": "2026-01-16T05:15:27.073454"
       }
     ]
   }

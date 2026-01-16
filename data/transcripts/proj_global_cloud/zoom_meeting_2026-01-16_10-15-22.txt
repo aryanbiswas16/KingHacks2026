@@ -1,0 +1,1 @@
+[2026-01-16T10:13:34.813Z] You: Options. But before it actually does work, we will have to provide consent in order to make sure that we're following proper guidelines. And so once this is provided, we are using a chrome extension to kind of scrape through the dollar tree and provide these transcripts and use it as context for our AI conversations. And yeah.

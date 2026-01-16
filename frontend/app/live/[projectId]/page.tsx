@@ -391,15 +391,17 @@ export default function LiveTranscriptionPage() {
             </div>
           </div>
 
-          <div className="h-full flex flex-col gap-3 min-h-0">
-            <ChatInterface
-              projectId={projectId || ""}
-              projectName={projectId || "Live Session"}
-              messages={messages}
-              setMessages={setMessages}
-              transcriptSnippet={transcriptSnippet}
-              containerClassName="flex-1 min-h-0"
-            />
+          <div className="h-full flex flex-col gap-3 min-h-0 overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <ChatInterface
+                projectId={projectId || ""}
+                projectName={projectId || "Live Session"}
+                messages={messages}
+                setMessages={setMessages}
+                transcriptSnippet={transcriptSnippet}
+                containerClassName="h-full"
+              />
+            </div>
             {(aiNotesError || aiCombinedList.length > 0) && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
                 <div className="flex items-center justify-between gap-3 mb-2">
