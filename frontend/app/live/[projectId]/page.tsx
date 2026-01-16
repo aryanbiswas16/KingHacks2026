@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Mic, ArrowLeft, Circle, Clipboard } from "lucide-react";
+import { Mic, ArrowLeft, Circle, Clipboard, Sparkles } from "lucide-react";
 import { ChatInterface, type Message } from "../../../components/ChatInterface";
 
 export default function LiveTranscriptionPage() {
@@ -234,14 +234,23 @@ export default function LiveTranscriptionPage() {
             </div>
           </div>
 
-          <div className="h-full">
+          <div className="h-full flex flex-col gap-3">
             <ChatInterface
               projectId={projectId || ""}
               projectName={projectId || "Live Session"}
               messages={messages}
               setMessages={setMessages}
-              containerClassName="h-full"
+              containerClassName="flex-1"
             />
+            <div className="w-full rounded-2xl p-[2px] bg-[conic-gradient(from_180deg_at_50%_50%,#22d3ee,#a855f7,#f43f5e,#f59e0b,#84cc16,#22d3ee)] shadow-[0_0_25px_rgba(168,85,247,0.45)]">
+              <button
+                className="w-full h-12 rounded-[14px] bg-slate-950 text-white font-semibold shadow-[0_8px_20px_rgba(15,23,42,0.45)] hover:bg-slate-900 transition-colors flex items-center justify-center gap-2"
+                type="button"
+              >
+                <Sparkles className="w-4 h-4" />
+                AI Suggestion
+              </button>
+            </div>
           </div>
         </div>
       </main>
