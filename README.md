@@ -1,4 +1,4 @@
-# Beacon Consulting Assistant
+# Beacon CRM Assistant
 
 Beacon is an AI-powered consulting assistant with a FastAPI backend, a Next.js frontend, and a required Chrome extension for live transcript capture.
 
