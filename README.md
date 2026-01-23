@@ -5,6 +5,8 @@ Beacon is an AI-powered consulting assistant with a FastAPI backend, a Next.js f
 
 [![Watch the video](https://img.youtube.com/vi/HUyS6nTOO0E/maxresdefault.jpg)](https://youtu.be/HUyS6nTOO0E)
 
+### [Watch this video on YouTube](https://youtu.be/HUyS6nTOO0E)
+
 ## Project Structure
 
 ```
