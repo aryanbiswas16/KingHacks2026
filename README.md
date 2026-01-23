@@ -3,7 +3,8 @@
 Beacon is an AI-powered consulting assistant with a FastAPI backend, a Next.js frontend, and a required Chrome extension for live transcript capture.
 
 
-[![Watch the video](https://img.https://www.youtube.com/watch?v=HUyS6nTOO0E/maxresdefault.jpg)](https://www.youtube.com/watch?v=HUyS6nTOO0E)
+[![Watch the video](https://img.youtube.com/vi/HUyS6nTOO0E/maxresdefault.jpg)](https://youtu.be/HUyS6nTOO0E)
+
 ## Project Structure
 
 ```
